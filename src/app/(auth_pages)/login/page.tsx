@@ -1,150 +1,162 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { signIn } from "next-auth/react"
-import Link from "next/link"
-import { Eye, EyeOff, Lock, Mail, AlertCircle, CheckCircle2 } from "lucide-react"
-import { toast } from "sonner"
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import Link from "next/link";
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
+import { toast } from "sonner";
 
 // Changed from `export function login()` to `export default function LoginPage()`
 export default function LoginPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
-  const [isLoading, setIsLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     rememberMe: false,
-  })
+  });
   const [errors, setErrors] = useState<{
-    email?: string
-    password?: string
-    general?: string
-  }>({})
+    email?: string;
+    password?: string;
+    general?: string;
+  }>({});
 
   useEffect(() => {
-    const rememberedEmail = localStorage.getItem("rememberedEmail")
+    const rememberedEmail = localStorage.getItem("rememberedEmail");
     if (rememberedEmail) {
-      setFormData((prev) => ({ ...prev, email: rememberedEmail, rememberMe: true }))
+      setFormData((prev) => ({
+        ...prev,
+        email: rememberedEmail,
+        rememberMe: true,
+      }));
     }
-  }, [])
+  }, []);
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
-    }))
+    }));
 
     // Clear errors when user starts typing
     if (errors[name as keyof typeof errors]) {
-      setErrors((prev) => ({ ...prev, [name]: undefined }))
+      setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
     if (errors.general) {
-      setErrors((prev) => ({ ...prev, general: undefined }))
+      setErrors((prev) => ({ ...prev, general: undefined }));
     }
-  }
+  };
 
   // Validate form
   const validateForm = () => {
-    const newErrors: typeof errors = {}
+    const newErrors: typeof errors = {};
 
     if (!formData.email.trim()) {
-      newErrors.email = "Email is required"
+      newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address"
+      newErrors.email = "Please enter a valid email address";
     }
 
     if (!formData.password) {
-      newErrors.password = "Password is required"
+      newErrors.password = "Password is required";
     }
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-  
-    if (!validateForm()) return
-  
-    setIsLoading(true)
-    setErrors({})
-  
+    e.preventDefault();
+
+    if (!validateForm()) return;
+
+    setIsLoading(true);
+    setErrors({});
+
     try {
       const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
         redirect: false,
-      })
-  
+      });
+
       if (result?.ok) {
-        toast.success("Login successful!")
-        
+        toast.success("Login successful!");
+
         if (formData.rememberMe) {
-          localStorage.setItem("rememberedEmail", formData.email)
+          localStorage.setItem("rememberedEmail", formData.email);
         } else {
-          localStorage.removeItem("rememberedEmail")
+          localStorage.removeItem("rememberedEmail");
         }
-  
+
         setTimeout(() => {
-          window.location.href = callbackUrl
-        }, 1000)
-        
+          window.location.href = callbackUrl;
+        }, 1000);
       } else {
         // Generic error message for security
-        const errorMsg = "Invalid email or password. Please try again."
-        setErrors({ general: errorMsg })
-        toast.error(errorMsg)
+        const errorMsg = "Invalid email or password. Please try again.";
+        setErrors({ general: errorMsg });
+        toast.error(errorMsg);
       }
-      
     } catch (error) {
-      console.error("Login error:", error)
-      toast.error("An error occurred. Please try again.")
+      console.error("Login error:", error);
+      toast.error("An error occurred. Please try again.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
-  
+  };
+
   // Optional: Add resend OTP function for email verification errors
   const handleResendOTP = async (email: string) => {
     try {
-      setIsLoading(true)
-      const response = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      setIsLoading(true);
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
-      })
-      
+      });
+
       if (response.ok) {
-        toast.success("Verification email sent! Please check your inbox.")
+        toast.success("Verification email sent! Please check your inbox.");
       } else {
-        toast.error("Failed to resend verification email. Please try again.")
+        toast.error("Failed to resend verification email. Please try again.");
       }
     } catch (error) {
-      console.error("Resend OTP error:", error)
-      toast.error("Failed to resend verification email.")
+      console.error("Resend OTP error:", error);
+      toast.error("Failed to resend verification email.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // Handle forgot password
   const handleForgotPassword = () => {
     if (!formData.email) {
-      setErrors((prev) => ({ ...prev, email: "Please enter your email to reset password" }))
-      return
+      setErrors((prev) => ({
+        ...prev,
+        email: "Please enter your email to reset password",
+      }));
+      return;
     }
-    router.push(`/forgot-password?email=${encodeURIComponent(formData.email)}`)
-  }
+    router.push(`/forgot-password?email=${encodeURIComponent(formData.email)}`);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -156,7 +168,9 @@ export default function LoginPage() {
               <span className="text-white font-bold text-2xl">SF</span>
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">Welcome Back</h1>
+          <h1 className="text-4xl font-bold text-slate-900 mb-2">
+            Welcome Back
+          </h1>
           <p className="text-slate-600">Sign in to your Scales Flow account</p>
         </div>
 
@@ -167,7 +181,9 @@ export default function LoginPage() {
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center">
                 <AlertCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
-                <p className="text-sm font-medium text-red-800">{errors.general}</p>
+                <p className="text-sm font-medium text-red-800">
+                  {errors.general}
+                </p>
               </div>
             </div>
           )}
@@ -175,12 +191,19 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-slate-900 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-semibold text-slate-900 mb-2"
+              >
                 Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className={`h-5 w-5 ${errors.email ? "text-red-400" : "text-slate-400"}`} />
+                  <Mail
+                    className={`h-5 w-5 ${
+                      errors.email ? "text-red-400" : "text-slate-400"
+                    }`}
+                  />
                 </div>
                 <input
                   id="email"
@@ -213,7 +236,10 @@ export default function LoginPage() {
             {/* Password Field */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label htmlFor="password" className="block text-sm font-semibold text-slate-900">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-semibold text-slate-900"
+                >
                   Password
                 </label>
                 <button
@@ -227,7 +253,11 @@ export default function LoginPage() {
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className={`h-5 w-5 ${errors.password ? "text-red-400" : "text-slate-400"}`} />
+                  <Lock
+                    className={`h-5 w-5 ${
+                      errors.password ? "text-red-400" : "text-slate-400"
+                    }`}
+                  />
                 </div>
                 <input
                   id="password"
@@ -276,7 +306,10 @@ export default function LoginPage() {
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded disabled:opacity-50"
                   disabled={isLoading}
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-900">
+                <label
+                  htmlFor="remember-me"
+                  className="ml-2 block text-sm text-slate-900"
+                >
                   Remember me
                 </label>
               </div>
@@ -328,7 +361,10 @@ export default function LoginPage() {
           <div className="mt-8 text-center">
             <p className="text-sm text-slate-600">
               Don't have an account?{" "}
-              <Link href="/register_admin" className="font-semibold text-blue-600 hover:text-blue-500 disabled:opacity-50">
+              <Link
+                href="/register_admin"
+                className="font-semibold text-blue-600 hover:text-blue-500 disabled:opacity-50"
+              >
                 Sign up for Admin Only
               </Link>
             </p>
@@ -348,9 +384,11 @@ export default function LoginPage() {
               Support
             </Link>
           </div>
-          <p className="text-xs text-slate-400">© 2025 Scales Flow. All rights reserved.</p>
+          <p className="text-xs text-slate-400">
+            © 2025 Scales Flow. All rights reserved.
+          </p>
         </div>
       </div>
     </div>
-  )
+  );
 }

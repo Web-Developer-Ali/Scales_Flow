@@ -1,0 +1,1 @@
+ls -la ~/personal_projects/sales_flow/src/app/ 2>/dev/null || echo "app folder might be missing"
