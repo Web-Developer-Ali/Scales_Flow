@@ -54,7 +54,7 @@ export async function proxy(req: NextRequest) {
   if (!token) return NextResponse.redirect(new URL("/login", req.url));
 
   // Unverified users → redirect to OTP
-  if (!token.isVerified) {
+  if (!token.is_verified) {
     const otpUrl = new URL("/otp-verification", req.url);
     if (token.email) otpUrl.searchParams.set("email", token.email);
     return NextResponse.redirect(otpUrl);

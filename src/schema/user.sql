@@ -1,28 +1,21 @@
-/* ============================================================
-   EXTENSIONS
-   ============================================================ */
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 
-/* ============================================================
-   USERS TABLE
-   Core user accounts with role-based hierarchy + OTP support
-   ============================================================ */
+
+--    USERS TABLE
 
 CREATE TABLE users (
     -- Primary identifier
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-    /* --------------------------------------------------------
-       Authentication
-       -------------------------------------------------------- */
+   
+    --    Authentication
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
 
-    /* --------------------------------------------------------
-       Profile
-       -------------------------------------------------------- */
+    --    Profile
+   
     name VARCHAR(100) NOT NULL,
     company_name VARCHAR(100),
 
@@ -75,7 +68,6 @@ CREATE TABLE users (
 
 /* ============================================================
    USERS INDEXES
-   (Created separately — PostgreSQL best practice)
    ============================================================ */
 
 -- Case-insensitive email lookup
@@ -91,43 +83,26 @@ CREATE INDEX idx_users_created_by ON users (created_by);
 CREATE INDEX idx_users_created_at ON users (created_at);
 
 
-/* ============================================================
-   USER ACTIVITIES TABLE
-   Audit log for user actions
-   ============================================================ */
+-- function to auto update user table 
+CREATE OR REPLACE FUNCTION update_user_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE TABLE user_activities (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TRIGGER trigger_update_user_timestamp
+BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION update_user_timestamp();
 
-    -- User reference
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-    -- Activity details
-    activity_type VARCHAR(50) NOT NULL,
-    description TEXT,
 
-    -- Request metadata
-    ip_address INET,
-    user_agent TEXT,
-
-    -- Timestamp
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
 
 
 /* ============================================================
-   USER ACTIVITIES INDEXES
-   ============================================================ */
-
-CREATE INDEX idx_user_activities_user_id
-    ON user_activities (user_id);
-
-CREATE INDEX idx_user_activities_created_at
-    ON user_activities (created_at);
-
-
-/* ============================================================
-   UPDATED_AT TRIGGER (Reusable)
+   create user using db function
    ============================================================ */
 
 CREATE OR REPLACE FUNCTION create_user_with_role(
