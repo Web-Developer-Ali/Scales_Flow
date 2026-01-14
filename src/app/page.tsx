@@ -53,7 +53,7 @@ export default function LandingPage() {
                 Login
               </Button>
             </Link>
-            <Link href="/admin">
+            <Link href="/admin/dashboard">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 Access Dashboard
               </Button>

@@ -44,13 +44,6 @@ const ROLE_ACCESS: Record<string, string[]> = {
   "/scales_man": ["scales_man"],
 };
 
-// OR if you want admins to access everything:
-// const ROLE_ACCESS: Record<string, string[]> = {
-//   "/admin": ["admin"],
-//   "/manager": ["admin", "manager"],
-//   "/scales_man": ["admin", "scales_man"],
-// };
-
 // ===== MIDDLEWARE =====
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
