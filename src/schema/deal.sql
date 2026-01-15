@@ -1,18 +1,24 @@
--- Create ENUM for deal stage
+-- ========================================================
+-- ENUM DEFINITIONS
+-- ========================================================
+
 DO $$ BEGIN
     CREATE TYPE deal_stage AS ENUM ('prospect', 'qualified', 'demo', 'negotiation', 'closed');
 EXCEPTION
-    WHEN duplicate_object THEN null;
+    WHEN duplicate_object THEN NULL;
 END $$;
 
--- Create ENUM for deal status
 DO $$ BEGIN
     CREATE TYPE deal_status AS ENUM ('active', 'won', 'lost', 'on-hold');
 EXCEPTION
-    WHEN duplicate_object THEN null;
+    WHEN duplicate_object THEN NULL;
 END $$;
 
--- Deal Table
+
+-- ========================================================
+-- DEALS TABLE
+-- ========================================================
+
 CREATE TABLE IF NOT EXISTS deals (
     id UUID PRIMARY KEY,
 
@@ -27,24 +33,28 @@ CREATE TABLE IF NOT EXISTS deals (
     currency VARCHAR(10) NOT NULL DEFAULT 'USD',
 
     status deal_status NOT NULL DEFAULT 'active',
-
     stage deal_stage NOT NULL DEFAULT 'prospect',
 
-    probability INT CHECK (probability BETWEEN 0 AND 100),
+    probability INT NOT NULL DEFAULT 0 CHECK (probability BETWEEN 0 AND 100),
 
     expectedCloseDate DATE,
 
-    -- fixed constraint to avoid error
     assignedTo UUID REFERENCES users(id) ON DELETE SET NULL,
-
     createdBy UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
-    createdAt TIMESTAMP NOT NULL DEFAULT NOW(),
-    updatedAt TIMESTAMP NOT NULL DEFAULT NOW()
+    createdAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    generated_month DATE
 );
 
--- auto update trigger
-CREATE OR REPLACE FUNCTION update_timestamp()
+
+-- ========================================================
+-- TRIGGERS
+-- ========================================================
+
+-- Auto update updatedAt
+CREATE OR REPLACE FUNCTION update_deal_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updatedAt = NOW();
@@ -52,40 +62,40 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_deal_timestamp
+CREATE TRIGGER trg_update_deal_timestamp
 BEFORE UPDATE ON deals
 FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
+EXECUTE FUNCTION update_deal_timestamp();
 
 
--- INDEXES FOR CURRENT MONTH
+-- Generate `generated_month` from createdAt
+CREATE OR REPLACE FUNCTION set_generated_month()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.generated_month := date_trunc('month', NEW.createdAt)::date;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- deals created this month
-CREATE INDEX idx_deals_created_this_month 
-ON deals (createdAt)
-WHERE createdAt >= date_trunc('month', now());
+CREATE TRIGGER trg_set_generated_month
+BEFORE INSERT ON deals
+FOR EACH ROW
+EXECUTE FUNCTION set_generated_month();
 
--- deals updated this month
-CREATE INDEX idx_deals_updated_this_month 
-ON deals (updatedAt)
-WHERE updatedAt >= date_trunc('month', now());
 
--- closed deals assigned to rep this month
-CREATE INDEX idx_deals_status_assigned_updated_month 
-ON deals (status, assignedTo, updatedAt)
-WHERE updatedAt >= date_trunc('month', now());
+-- ========================================================
+-- INDEXES
+-- ========================================================
 
--- new deals assigned this month
-CREATE INDEX idx_deals_assigned_created_month 
-ON deals (assignedTo, createdAt)
-WHERE createdAt >= date_trunc('month', now());
+CREATE INDEX IF NOT EXISTS idx_deals_month
+ON deals (generated_month);
 
--- stage stats this month
-CREATE INDEX idx_deals_stage_month 
-ON deals (stage)
-WHERE createdAt >= date_trunc('month', now());
+CREATE INDEX IF NOT EXISTS idx_deals_month_status
+ON deals (generated_month, status);
 
--- additional: stage + status this month (recommended)
-CREATE INDEX idx_deals_stage_status_month
-ON deals(stage, status)
-WHERE createdAt >= date_trunc('month', now());
+CREATE INDEX IF NOT EXISTS idx_deals_month_stage
+ON deals (generated_month, stage);
+
+CREATE INDEX IF NOT EXISTS idx_deals_month_assigned
+ON deals (generated_month, assignedTo);
+

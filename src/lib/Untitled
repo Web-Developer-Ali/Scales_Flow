@@ -1,8 +1,0 @@
-# Create a timestamped backup
-backup_dir=~/sales_flow_backup_$(date +%Y%m%d_%H%M%S)
-cp -r ~/personal_projects/sales_flow $backup_dir
-echo "✅ Backup created at: $backup_dir"
-
-# Also create a zip backup
-cd ~/personal_projects
-tar -czf sales_flow_complete_backup_$(date +%Y%m%d).tar.gz sales_flow/

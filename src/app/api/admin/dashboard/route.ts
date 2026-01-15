@@ -1,84 +1,148 @@
 import { NextResponse } from "next/server";
-import { withTransaction } from "@/lib/db";
+import { query } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../auth/[...nextauth]/options";
 
-export async function GET(req: Request) {
+export async function GET() {
+  const session = await getServerSession(authOptions);
+
+  if (
+    !session ||
+    !session.user ||
+    !session.user.id ||
+    session.user.role !== "admin"
+  ) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   try {
-    const { searchParams } = new URL(req.url);
+    // First day of current month
+    const now = new Date();
+    now.setDate(1);
+    const monthStart = now.toISOString().substring(0, 10);
 
-    // Optional filters (user-controlled)
-    const stage = searchParams.get("stage");
-    const status = searchParams.get("status");
+    // 1️⃣ TOTAL PIPELINE VALUE (all active deals this month)
+    const totalPipelineQuery = `
+      SELECT COALESCE(SUM(value), 0) AS total_pipeline
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'active';
+    `;
 
-    const data = await withTransaction(async (client) => {
-      // SAFE dynamic filtering
-      const conditions = [];
-      const params = [];
-      let count = 1;
+    const {
+      rows: [pipeline],
+    } = await query(totalPipelineQuery, [monthStart]);
 
-      if (stage) {
-        conditions.push(`d.stage = $${count++}`);
-        params.push(stage);
-      }
-      if (status) {
-        conditions.push(`d.status = $${count++}`);
-        params.push(status);
-      }
+    // 2️⃣ CLOSED THIS MONTH (value of closed deals)
+    const closedThisMonthQuery = `
+      SELECT COALESCE(SUM(value), 0) AS closed_value
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'won';
+    `;
 
-      const whereClause = conditions.length
-        ? "AND " + conditions.join(" AND ")
-        : "";
+    const {
+      rows: [closed],
+    } = await query(closedThisMonthQuery, [monthStart]);
 
-      // TOP SALES REPS SAFE QUERY
-      const topSalesRepsQuery = `
-        SELECT 
-          u.id,
-          u.name,
-          COUNT(d.id) AS total_deals,
-          SUM(d.amount) AS total_amount
-        FROM deals d
-        JOIN users u ON u.id = d.sales_rep_id
-        WHERE d.created_at >= date_trunc('month', CURRENT_DATE)
-          AND d.created_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
-          ${whereClause}
-        GROUP BY u.id, u.name
-        ORDER BY total_amount DESC
-        LIMIT 6;
-      `;
+    // 3️⃣ DEAL TARGET PROGRESS
+    const targetQuery = `
+      SELECT COUNT(*) AS closed_count
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'won';
+    `;
 
-      const topSalesReps = await client.query(topSalesRepsQuery, params);
+    const {
+      rows: [target],
+    } = await query(targetQuery, [monthStart]);
 
-      // RECENT DEALS SAFE QUERY
-      const recentDealsQuery = `
-        SELECT 
-          d.id,
-          d.title,
-          d.amount,
-          d.stage,
-          d.status,
-          d.created_at,
-          u.name as owner
-        FROM deals d
-        JOIN users u ON u.id = d.sales_rep_id
-        WHERE d.created_at >= date_trunc('month', CURRENT_DATE)
-          AND d.created_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
-          ${whereClause}
-        ORDER BY d.created_at DESC
-        LIMIT 10;
-      `;
+    const MONTH_TARGET = 50; // You can store in DB later
+    const targetProgress = {
+      closed: Number(target.closed_count),
+      target: MONTH_TARGET,
+      percent: Math.round((Number(target.closed_count) / MONTH_TARGET) * 100),
+    };
 
-      const recentDeals = await client.query(recentDealsQuery, params);
+    // 4️⃣ AVG CLOSE TIME
+    const avgCloseTimeQuery = `
+      SELECT AVG(EXTRACT(day FROM (updatedAt - createdAt))) AS avg_close_days
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'won';
+    `;
 
-      return {
-        topSalesReps: topSalesReps.rows,
-        recentDeals: recentDeals.rows,
-      };
+    const {
+      rows: [avgClose],
+    } = await query(avgCloseTimeQuery, [monthStart]);
+
+    // 5️⃣ DEAL PIPELINE BY STAGE
+    const pipelineByStageQuery = `
+      SELECT stage, COUNT(*) AS count
+      FROM deals
+      WHERE generated_month = $1
+      GROUP BY stage
+      ORDER BY stage;
+    `;
+
+    const pipelineByStage = await query(pipelineByStageQuery, [monthStart]);
+
+    // 6️⃣ TEAM PERFORMANCE (TOP 6)
+    const teamPerformanceQuery = `
+      SELECT 
+        u.id,
+        u.name,
+        COUNT(d.id) AS closed_deals,
+        COALESCE(SUM(d.value), 0) AS total_value
+      FROM users u
+      LEFT JOIN deals d 
+        ON d.assignedTo = u.id
+       AND d.generated_month = $1
+       AND d.status = 'won'
+      GROUP BY u.id
+      ORDER BY total_value DESC
+      LIMIT 6;
+    `;
+
+    const teamPerformance = await query(teamPerformanceQuery, [monthStart]);
+
+    // 7️⃣ RECENT DEALS
+    const recentDealsQuery = `
+      SELECT 
+        id,
+        title,
+        company,
+        value,
+        status,
+        stage,
+        assignedTo,
+        createdAt
+      FROM deals
+      WHERE generated_month = $1
+      ORDER BY createdAt DESC
+      LIMIT 10;
+    `;
+
+    const recentDeals = await query(recentDealsQuery, [monthStart]);
+
+    // FINAL RETURN
+    return NextResponse.json({
+      success: true,
+      month: monthStart,
+      metrics: {
+        totalPipeline: Number(pipeline.total_pipeline),
+        closedThisMonth: Number(closed.closed_value),
+        targetProgress,
+        avgCloseTime: Number(avgClose.avg_close_days) || 0,
+      },
+      pipelineByStage: pipelineByStage.rows,
+      teamPerformance: teamPerformance.rows,
+      recentDeals: recentDeals.rows,
     });
-
-    return NextResponse.json({ success: true, ...data });
-  } catch (error) {
-    console.error("Dashboard API Error:", error);
+  } catch (err) {
+    console.error("Dashboard API Error:", err);
     return NextResponse.json(
-      { success: false, error: "Failed to load dashboard" },
+      { success: false, error: "Internal Server Error" },
       { status: 500 }
     );
   }

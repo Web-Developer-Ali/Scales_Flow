@@ -19,56 +19,52 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     company_name VARCHAR(100),
 
-    /* --------------------------------------------------------
-       Roles & hierarchy
-       -------------------------------------------------------- */
+    --    Roles & hierarchy
     role VARCHAR(20) NOT NULL DEFAULT 'scales_man',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 
-    /* --------------------------------------------------------
-       OTP: Email verification
-       -------------------------------------------------------- */
+
+    --    OTP: Email verification
     email_otp VARCHAR(6),
     email_otp_expires_at TIMESTAMP WITH TIME ZONE,
 
-    /* --------------------------------------------------------
-       OTP: Password reset
-       -------------------------------------------------------- */
+
+    --    OTP: Password reset
+     
     reset_password_otp VARCHAR(6),
     reset_password_otp_expires_at TIMESTAMP WITH TIME ZONE,
 
-    /* --------------------------------------------------------
-       Authentication tracking
-       -------------------------------------------------------- */
+  
+    --    Authentication tracking
+
     last_login_at TIMESTAMP WITH TIME ZONE,
     login_count INTEGER NOT NULL DEFAULT 0,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
     last_failed_login_at TIMESTAMP WITH TIME ZONE,
 
-    /* --------------------------------------------------------
-       Account status
-       -------------------------------------------------------- */
+ 
+    --    Account status
+ 
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
 
-    /* --------------------------------------------------------
-       Timestamps
-       -------------------------------------------------------- */
+ 
+    --    Timestamps
+
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
-    /* --------------------------------------------------------
-       Constraints
-       -------------------------------------------------------- */
+   
+    --    Constraints
+   
     CONSTRAINT users_email_unique UNIQUE (email),
     CONSTRAINT users_role_check CHECK (role IN ('admin', 'manager', 'scales_man'))
 );
 
 
 
-/* ============================================================
-   USERS INDEXES
-   ============================================================ */
+--    USERS INDEXES
+
 
 -- Case-insensitive email lookup
 CREATE INDEX idx_users_email_lower ON users (LOWER(email));
@@ -100,10 +96,7 @@ EXECUTE FUNCTION update_user_timestamp();
 
 
 
-
-/* ============================================================
-   create user using db function
-   ============================================================ */
+-- create user using db function
 
 CREATE OR REPLACE FUNCTION create_user_with_role(
     p_email VARCHAR,
@@ -224,9 +217,7 @@ $$ LANGUAGE plpgsql;
 
 
 
-/* ============================================================
-   USER HIERARCHY VIEW
-   ============================================================ */
+-- USER HIERARCHY VIEW
 
 CREATE VIEW user_hierarchy AS
 SELECT
