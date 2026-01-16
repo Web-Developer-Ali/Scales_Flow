@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
 import {
   Card,
   CardContent,
@@ -8,8 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Users, UserPlus, TrendingUp, AlertCircle } from "lucide-react";
+import {
+  Users,
+  UserPlus,
+  TrendingUp,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { TeamManagementHeader } from "@/components/addTeamMember_admin/team-management-header";
 import { CreateTeamMemberDialog } from "@/components/addTeamMember_admin/create-team-member-dialog";
 import { TeamTable } from "@/components/addTeamMember_admin/team-table";
@@ -37,72 +45,63 @@ export function TeamManagementPageClient() {
     salesReps: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch team data on mount
-  useEffect(() => {
-    fetchTeamData();
-  }, []);
-
-  const fetchTeamData = async () => {
+  // Fetch team data
+  const fetchTeamData = useCallback(async (showRefreshIndicator = false) => {
     try {
-      setIsLoading(true);
+      if (showRefreshIndicator) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
-      const response = await fetch("/api/admin/getData_forCreateUser");
-      const data = await response.json();
+      const response = await axios.get("/api/admin/getData_forCreateUser");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch team data");
-      }
-
-      if (data.success) {
-        setTeamMembers(data.teamMembers);
-        setSummary(data.summary);
+      if (response.data.success) {
+        setTeamMembers(response.data.teamMembers);
+        setSummary(response.data.summary);
       } else {
-        throw new Error("Invalid response format");
+        throw new Error(response.data.error || "Failed to fetch team data");
       }
     } catch (err) {
       console.error("Error fetching team data:", err);
-      setError(err instanceof Error ? err.message : "Failed to load team data");
+      const errorMessage =
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? err.response.data.error
+          : "Failed to load team data";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleAddMember = async (data: any) => {
-    try {
-      // Optimistically update UI
-      const newMember: TeamMember = {
-        id: `temp-${Date.now()}`,
-        ...data,
-        status: "active",
-        joinDate: new Date().toISOString().split("T")[0],
-      };
-      setTeamMembers([...teamMembers, newMember]);
-      setSummary((prev) => ({
-        totalTeamMembers: prev.totalTeamMembers + 1,
-        managers: data.role === "Manager" ? prev.managers + 1 : prev.managers,
-        salesReps:
-          data.role === "Sales Rep" ? prev.salesReps + 1 : prev.salesReps,
-      }));
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchTeamData();
+  }, [fetchTeamData]);
 
-      // Refresh from server to get actual data
-      await fetchTeamData();
-    } catch (err) {
-      console.error("Error adding team member:", err);
-      setError("Failed to add team member");
-      // Revert optimistic update
-      await fetchTeamData();
-    }
-  };
+  // Handle successful member creation
+  const handleMemberCreated = useCallback(() => {
+    fetchTeamData(true);
+  }, [fetchTeamData]);
 
+  // Handle member deletion
   const handleDeleteMember = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this team member? This action cannot be undone."
+    );
+
+    if (!confirmed) return;
+
     try {
       const memberToDelete = teamMembers.find((m) => m.id === id);
 
       // Optimistically update UI
-      setTeamMembers(teamMembers.filter((member) => member.id !== id));
+      setTeamMembers((prev) => prev.filter((member) => member.id !== id));
       if (memberToDelete) {
         setSummary((prev) => ({
           totalTeamMembers: prev.totalTeamMembers - 1,
@@ -117,14 +116,30 @@ export function TeamManagementPageClient() {
         }));
       }
 
-      // Refresh from server to confirm deletion
-      await fetchTeamData();
+      // Call delete API
+      const response = await axios.delete(`/api/admin/deleteUser/${id}`);
+
+      if (!response.data.success) {
+        throw new Error("Failed to delete team member");
+      }
+
+      // Refresh to ensure consistency
+      await fetchTeamData(true);
     } catch (err) {
       console.error("Error deleting team member:", err);
-      setError("Failed to delete team member");
+      const errorMessage =
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? err.response.data.error
+          : "Failed to delete team member";
+      setError(errorMessage);
       // Revert optimistic update
-      await fetchTeamData();
+      await fetchTeamData(true);
     }
+  };
+
+  // Manual refresh handler
+  const handleRefresh = () => {
+    fetchTeamData(true);
   };
 
   if (isLoading) {
@@ -132,8 +147,11 @@ export function TeamManagementPageClient() {
       <main className="min-h-screen bg-background">
         <TeamManagementHeader />
         <div className="px-6 py-8">
-          <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p className="text-sm text-muted-foreground">
+              Loading team data...
+            </p>
           </div>
         </div>
       </main>
@@ -144,18 +162,28 @@ export function TeamManagementPageClient() {
     <main className="min-h-screen bg-background">
       <TeamManagementHeader />
 
-      <div className="px-6 py-8">
+      <div className="px-6 py-8 max-w-7xl mx-auto">
         {/* Error Alert */}
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="flex items-center justify-between">
+              <span>{error}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setError(null)}
+                className="ml-4"
+              >
+                Dismiss
+              </Button>
+            </AlertDescription>
           </Alert>
         )}
 
         {/* Team Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="bg-card border-border">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card className="bg-gradient-to-br from-card to-card/50 border-border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total Team Members
@@ -163,7 +191,7 @@ export function TeamManagementPageClient() {
               <Users className="w-4 h-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold">
                 {summary.totalTeamMembers}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -172,7 +200,7 @@ export function TeamManagementPageClient() {
             </CardContent>
           </Card>
 
-          <Card className="bg-card border-border">
+          <Card className="bg-gradient-to-br from-card to-card/50 border-border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Managers
@@ -180,12 +208,12 @@ export function TeamManagementPageClient() {
               <UserPlus className="w-4 h-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{summary.managers}</div>
+              <div className="text-3xl font-bold">{summary.managers}</div>
               <p className="text-xs text-muted-foreground mt-1">Team leaders</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-card border-border">
+          <Card className="bg-gradient-to-br from-card to-card/50 border-border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Sales Reps
@@ -193,7 +221,7 @@ export function TeamManagementPageClient() {
               <TrendingUp className="w-4 h-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{summary.salesReps}</div>
+              <div className="text-3xl font-bold">{summary.salesReps}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Individual contributors
               </p>
@@ -202,21 +230,42 @@ export function TeamManagementPageClient() {
         </div>
 
         {/* Team Management */}
-        <Card className="bg-card border-border">
+        <Card className="bg-card border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Team Members</CardTitle>
+              <CardTitle className="text-xl">Team Members</CardTitle>
               <CardDescription>
                 Manage your managers and sales representatives
               </CardDescription>
             </div>
-            <CreateTeamMemberDialog onAddMember={handleAddMember} />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="gap-2"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+              <CreateTeamMemberDialog onSuccess={handleMemberCreated} />
+            </div>
           </CardHeader>
           <CardContent>
             {teamMembers.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                No team members found. Add your first team member to get
-                started.
+              <div className="text-center py-16 px-4">
+                <Users className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">
+                  No team members yet
+                </h3>
+                <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                  Get started by adding your first team member. They will
+                  receive an email with instructions to verify their account.
+                </p>
+                <CreateTeamMemberDialog onSuccess={handleMemberCreated} />
               </div>
             ) : (
               <TeamTable
