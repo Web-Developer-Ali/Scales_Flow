@@ -1,6 +1,6 @@
--- ========================================================
+
 -- ENUM DEFINITIONS
--- ========================================================
+
 
 DO $$ BEGIN
     CREATE TYPE deal_stage AS ENUM ('prospect', 'qualified', 'demo', 'negotiation', 'closed');
@@ -15,12 +15,11 @@ EXCEPTION
 END $$;
 
 
--- ========================================================
+
 -- DEALS TABLE
--- ========================================================
 
 CREATE TABLE IF NOT EXISTS deals (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
     title VARCHAR(255) NOT NULL,
     company VARCHAR(255) NOT NULL,
@@ -49,9 +48,9 @@ CREATE TABLE IF NOT EXISTS deals (
 );
 
 
--- ========================================================
+
 -- TRIGGERS
--- ========================================================
+
 
 -- Auto update updatedAt
 CREATE OR REPLACE FUNCTION update_deal_timestamp()
@@ -83,9 +82,9 @@ FOR EACH ROW
 EXECUTE FUNCTION set_generated_month();
 
 
--- ========================================================
+
 -- INDEXES
--- ========================================================
+
 
 CREATE INDEX IF NOT EXISTS idx_deals_month
 ON deals (generated_month);
