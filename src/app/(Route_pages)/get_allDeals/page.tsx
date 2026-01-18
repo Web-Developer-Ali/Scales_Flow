@@ -1,4 +1,4 @@
-import { ViewAllDealsClient } from "./view-all-deals-client";
+import ViewAllDealsClient from "./view-all-deals-client";
 
 export const metadata = {
   title: "All Deals - CRM Admin",
