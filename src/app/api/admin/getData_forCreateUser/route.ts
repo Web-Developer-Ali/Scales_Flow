@@ -16,9 +16,9 @@ export async function GET() {
       SELECT
         COUNT(*) AS total_team_members,
         COUNT(*) FILTER (WHERE role = 'manager') AS managers,
-        COUNT(*) FILTER (WHERE role = 'sales_rep') AS sales_reps
+        COUNT(*) FILTER (WHERE role = 'scales_man') AS scales_man
       FROM users
-      WHERE role IN ('manager', 'sales_rep');
+      WHERE role IN ('manager', 'scales_man');
     `;
 
     const {
@@ -35,7 +35,7 @@ export async function GET() {
         is_active,
         created_at::date AS join_date
       FROM users
-      WHERE role IN ('manager', 'sales_rep')
+      WHERE role IN ('manager', 'scales_man')
       ORDER BY created_at ASC;
     `;
 
@@ -50,13 +50,12 @@ export async function GET() {
       status: member.is_active ? "active" : "inactive",
       joinDate: member.join_date,
     }));
-
     return NextResponse.json({
       success: true,
       summary: {
         totalTeamMembers: Number(summary.total_team_members),
         managers: Number(summary.managers),
-        salesReps: Number(summary.sales_reps),
+        salesReps: Number(summary.scales_man),
       },
       teamMembers,
     });
@@ -64,7 +63,7 @@ export async function GET() {
     console.error("User API Error:", err);
     return NextResponse.json(
       { success: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

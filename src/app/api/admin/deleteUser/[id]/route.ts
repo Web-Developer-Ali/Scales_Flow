@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/options";
+import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { query } from "@/lib/db";
 
-export async function DELETE({ params }: { params: { id: string } }) {
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   const session = await getServerSession(authOptions);
 
-  // 🔐 Auth check
   if (!session || !session.user || !session.user.id || !session.user.role) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -14,12 +16,13 @@ export async function DELETE({ params }: { params: { id: string } }) {
     );
   }
 
+  // ✅ FIX HERE
+  const { id: userIdToDelete } = await context.params;
+
   const currentUserId = session.user.id;
   const currentUserRole = session.user.role;
-  const userIdToDelete = params.id;
 
   try {
-    // 1️⃣ Check if user exists
     const userCheckQuery = `
       SELECT id, created_by, role
       FROM users
@@ -37,15 +40,12 @@ export async function DELETE({ params }: { params: { id: string } }) {
 
     const targetUser = rows[0];
 
-    // 2️⃣ Authorization Logic
     let canDelete = false;
 
-    // Admin → delete anyone
     if (currentUserRole === "admin") {
       canDelete = true;
     }
 
-    // Manager → only users they created
     if (
       currentUserRole === "manager" &&
       targetUser.created_by === currentUserId
@@ -60,7 +60,6 @@ export async function DELETE({ params }: { params: { id: string } }) {
       );
     }
 
-    // 3️⃣ Prevent self delete (recommended)
     if (currentUserId === userIdToDelete) {
       return NextResponse.json(
         { success: false, error: "You cannot delete yourself" },
@@ -68,19 +67,6 @@ export async function DELETE({ params }: { params: { id: string } }) {
       );
     }
 
-    // 4️⃣ Extra safety (optional but smart)
-    // Manager should NOT delete admin/manager
-    if (currentUserRole === "manager" && targetUser.role !== "scales_man") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Managers can only delete sales users",
-        },
-        { status: 403 },
-      );
-    }
-
-    // 5️⃣ Delete user
     const deleteQuery = `
       DELETE FROM users
       WHERE id = $1
@@ -89,7 +75,6 @@ export async function DELETE({ params }: { params: { id: string } }) {
 
     const { rows: deletedUser } = await query(deleteQuery, [userIdToDelete]);
 
-    // 6️⃣ Response
     return NextResponse.json({
       success: true,
       message: "User deleted successfully",

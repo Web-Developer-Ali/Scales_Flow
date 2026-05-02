@@ -89,10 +89,69 @@ export function TeamManagementPageClient() {
     fetchTeamData(true);
   }, [fetchTeamData]);
 
+  // Handle member blocking
+  const handleBlockUser = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this team member? This action cannot be undone.",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const memberToBlock = teamMembers.find((m) => m.id === id);
+
+      // Optimistically update UI
+      setTeamMembers((prev) => prev.filter((member) => member.id !== id));
+      if (memberToBlock) {
+        setSummary((prev) => ({
+          totalTeamMembers: prev.totalTeamMembers - 1,
+          managers:
+            memberToBlock.role === "Manager"
+              ? prev.managers - 1
+              : prev.managers,
+          salesReps:
+            memberToBlock.role === "Sales Rep"
+              ? prev.salesReps - 1
+              : prev.salesReps,
+        }));
+      }
+
+      // Call delete API
+      const response = await axios.patch(
+        `/api/admin/blockUser/${id}?action=block`,
+      );
+
+      if (!response.data.success) {
+        throw new Error("Failed to Block team member");
+      }
+
+      // Refresh to ensure consistency
+      await fetchTeamData(true);
+    } catch (err) {
+      console.error("Error Blocking team member:", err);
+      const errorMessage =
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? err.response.data.error
+          : "Failed to Blocking team member";
+      setError(errorMessage);
+      // Revert optimistic update
+      await fetchTeamData(true);
+    }
+  };
+
+  // Handle member unblocking
+  const handleUnblockUser = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to unblock this team member? This action cannot be undone.",
+    );
+    if (!confirmed) return;
+    await fetchTeamData(true);
+  };
+
   // Handle member deletion
   const handleDeleteMember = async (id: string) => {
     const confirmed = window.confirm(
-      "Are you sure you want to delete this team member? This action cannot be undone."
+      "Are you sure you want to delete this team member? This action cannot be undone.",
     );
 
     if (!confirmed) return;
@@ -271,6 +330,8 @@ export function TeamManagementPageClient() {
               <TeamTable
                 teamMembers={teamMembers}
                 onDeleteMember={handleDeleteMember}
+                onBlockUser={handleBlockUser}
+                onUnblockUser={handleUnblockUser}
               />
             )}
           </CardContent>

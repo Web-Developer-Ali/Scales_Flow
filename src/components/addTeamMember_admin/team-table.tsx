@@ -11,13 +11,14 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, MoreHorizontal } from "lucide-react";
+import { Trash2, MoreHorizontal, Ban, Unlock } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DropdownMenuSeparator } from "@radix-ui/react-dropdown-menu";
 
 interface TeamMember {
   id: string;
@@ -31,9 +32,16 @@ interface TeamMember {
 interface TeamTableProps {
   teamMembers: TeamMember[];
   onDeleteMember: (id: string) => void;
+  onBlockUser: (id: string) => void;
+  onUnblockUser: (id: string) => void;
 }
 
-export function TeamTable({ teamMembers, onDeleteMember }: TeamTableProps) {
+export function TeamTable({
+  teamMembers,
+  onDeleteMember,
+  onBlockUser,
+  onUnblockUser,
+}: TeamTableProps) {
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -98,7 +106,11 @@ export function TeamTable({ teamMembers, onDeleteMember }: TeamTableProps) {
               </Badge>
             </TableCell>
             <TableCell className="text-muted-foreground text-sm">
-              {member.joinDate}
+              {new Date(member.joinDate).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short", // 'Jan', 'Feb', etc.
+                day: "numeric",
+              })}
             </TableCell>
             <TableCell className="text-right">
               <DropdownMenu>
@@ -112,6 +124,30 @@ export function TeamTable({ teamMembers, onDeleteMember }: TeamTableProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  {/* Add Block User option */}
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive"
+                    onClick={() => onBlockUser(member.id)}
+                  >
+                    <Ban className="w-4 h-4 mr-2" />
+                    Block User
+                  </DropdownMenuItem>
+
+                  {/* Optional: Add Unblock User option (conditionally shown) */}
+                  {member.status === "blocked" && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => onUnblockUser(member.id)}
+                    >
+                      <Unlock className="w-4 h-4 mr-2" />
+                      Unblock User
+                    </DropdownMenuItem>
+                  )}
+
+                  {/* Separator to group actions */}
+                  <DropdownMenuSeparator />
+
+                  {/* Delete Member option */}
                   <DropdownMenuItem
                     className="text-destructive cursor-pointer"
                     onClick={() => onDeleteMember(member.id)}

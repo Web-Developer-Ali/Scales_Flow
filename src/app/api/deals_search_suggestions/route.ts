@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     if (session.user.role !== "admin" && session.user.role !== "manager") {
       return NextResponse.json(
         { success: false, error: "Permission denied" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     const limit = parseInt(url.searchParams.get("limit") || "10");
 
     // Don't hit DB unnecessarily
-    if (search.length < 2) {
+    if (search.length < 4) {
       return NextResponse.json({ success: true, suggestions: [] });
     }
 
@@ -35,7 +35,6 @@ export async function GET(req: Request) {
     `;
 
     const { rows } = await query(sql, [search, limit]);
-
     return NextResponse.json({
       success: true,
       suggestions: rows,
@@ -44,7 +43,7 @@ export async function GET(req: Request) {
     console.error("Search Suggestions API Error:", error);
     return NextResponse.json(
       { success: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
