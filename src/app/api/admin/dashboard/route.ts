@@ -3,104 +3,147 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
 
-export async function DELETE({ params }: { params: { id: string } }) {
+export async function GET() {
   const session = await getServerSession(authOptions);
 
-  // 🔐 Auth check
-  if (!session || !session.user || !session.user.id || !session.user.role) {
-    return NextResponse.json(
-      { success: false, error: "Not authenticated" },
-      { status: 401 },
-    );
+  if (
+    !session ||
+    !session.user ||
+    !session.user.id ||
+    session.user.role !== "admin"
+  ) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const currentUserId = session.user.id;
-  const currentUserRole = session.user.role;
-  const userIdToDelete = params.id;
-
   try {
-    // 1️⃣ Check if user exists
-    const userCheckQuery = `
-      SELECT id, created_by, role
-      FROM users
-      WHERE id = $1
+    // First day of current month
+    const now = new Date();
+    now.setDate(1);
+    const monthStart = now.toISOString().substring(0, 10);
+
+    // 1️⃣ TOTAL PIPELINE VALUE (all active deals this month)
+    const totalPipelineQuery = `
+      SELECT COALESCE(SUM(value), 0) AS total_pipeline
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'active';
     `;
 
-    const { rows } = await query(userCheckQuery, [userIdToDelete]);
+    const {
+      rows: [pipeline],
+    } = await query(totalPipelineQuery, [monthStart]);
 
-    if (rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "User not found" },
-        { status: 404 },
-      );
-    }
-
-    const targetUser = rows[0];
-
-    // 2️⃣ Authorization Logic
-    let canDelete = false;
-
-    // Admin → delete anyone
-    if (currentUserRole === "admin") {
-      canDelete = true;
-    }
-
-    // Manager → only users they created
-    if (
-      currentUserRole === "manager" &&
-      targetUser.created_by === currentUserId
-    ) {
-      canDelete = true;
-    }
-
-    if (!canDelete) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden" },
-        { status: 403 },
-      );
-    }
-
-    // 3️⃣ Prevent self delete (recommended)
-    if (currentUserId === userIdToDelete) {
-      return NextResponse.json(
-        { success: false, error: "You cannot delete yourself" },
-        { status: 400 },
-      );
-    }
-
-    // 4️⃣ Extra safety (optional but smart)
-    // Manager should NOT delete admin/manager
-    if (currentUserRole === "manager" && targetUser.role !== "scales_man") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Managers can only delete sales users",
-        },
-        { status: 403 },
-      );
-    }
-
-    // 5️⃣ Delete user
-    const deleteQuery = `
-      DELETE FROM users
-      WHERE id = $1
-      RETURNING id, email
+    // 2️⃣ CLOSED THIS MONTH (value of closed deals)
+    const closedThisMonthQuery = `
+      SELECT COALESCE(SUM(value), 0) AS closed_value
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'won';
     `;
 
-    const { rows: deletedUser } = await query(deleteQuery, [userIdToDelete]);
+    const {
+      rows: [closed],
+    } = await query(closedThisMonthQuery, [monthStart]);
 
-    // 6️⃣ Response
+    // 3️⃣ DEAL TARGET PROGRESS
+    const targetQuery = `
+      SELECT COUNT(*) AS closed_count
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'won';
+    `;
+
+    const {
+      rows: [target],
+    } = await query(targetQuery, [monthStart]);
+
+    const MONTH_TARGET = 50; // You can store in DB later
+    const targetProgress = {
+      closed: Number(target.closed_count),
+      target: MONTH_TARGET,
+      percent: Math.round((Number(target.closed_count) / MONTH_TARGET) * 100),
+    };
+
+    // 4️⃣ AVG CLOSE TIME
+    const avgCloseTimeQuery = `
+      SELECT AVG(EXTRACT(day FROM (updatedAt - createdAt))) AS avg_close_days
+      FROM deals
+      WHERE generated_month = $1
+        AND status = 'won';
+    `;
+
+    const {
+      rows: [avgClose],
+    } = await query(avgCloseTimeQuery, [monthStart]);
+
+    // 5️⃣ DEAL PIPELINE BY STAGE
+    const pipelineByStageQuery = `
+      SELECT stage, COUNT(*) AS count
+      FROM deals
+      WHERE generated_month = $1
+      GROUP BY stage
+      ORDER BY stage;
+    `;
+
+    const pipelineByStage = await query(pipelineByStageQuery, [monthStart]);
+
+    // 6️⃣ TEAM PERFORMANCE (TOP 6)
+    const teamPerformanceQuery = `
+      SELECT 
+        u.id,
+        u.name,
+        COUNT(d.id) AS closed_deals,
+        COALESCE(SUM(d.value), 0) AS total_value
+      FROM users u
+      LEFT JOIN deals d 
+        ON d.assignedTo = u.id
+       AND d.generated_month = $1
+       AND d.status = 'won'
+      GROUP BY u.id
+      ORDER BY total_value DESC
+      LIMIT 6;
+    `;
+
+    const teamPerformance = await query(teamPerformanceQuery, [monthStart]);
+
+    // 7️⃣ RECENT DEALS
+    const recentDealsQuery = `
+      SELECT 
+        id,
+        title,
+        company,
+        value,
+        status,
+        stage,
+        assignedTo,
+        createdAt
+      FROM deals
+      WHERE generated_month = $1
+      ORDER BY createdAt DESC
+      LIMIT 10;
+    `;
+
+    const recentDeals = await query(recentDealsQuery, [monthStart]);
+
+    // FINAL RETURN
     return NextResponse.json({
       success: true,
-      message: "User deleted successfully",
-      user: deletedUser[0],
+      month: monthStart,
+      metrics: {
+        totalPipeline: Number(pipeline.total_pipeline),
+        closedThisMonth: Number(closed.closed_value),
+        targetProgress,
+        avgCloseTime: Number(avgClose.avg_close_days) || 0,
+      },
+      pipelineByStage: pipelineByStage.rows,
+      teamPerformance: teamPerformance.rows,
+      recentDeals: recentDeals.rows,
     });
   } catch (err) {
-    console.error("Delete User API Error:", err);
-
+    console.error("Dashboard API Error:", err);
     return NextResponse.json(
       { success: false, error: "Internal Server Error" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
