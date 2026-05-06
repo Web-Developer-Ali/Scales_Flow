@@ -16,16 +16,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DropdownMenuSeparator } from "@radix-ui/react-dropdown-menu";
 
 interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: string;
-  status: string;
+  role: string; // "Manager" | "Sales Rep"
+  status: string; // "active" | "blocked"
   joinDate: string;
 }
 
@@ -36,44 +36,43 @@ interface TeamTableProps {
   onUnblockUser: (id: string) => void;
 }
 
+const getInitials = (name: string) =>
+  name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+
+const getRoleStyle = (role: string) =>
+  role === "Manager"
+    ? "bg-emerald-500/10 text-emerald-700"
+    : "bg-blue-500/10 text-blue-700";
+
+const getStatusStyle = (status: string) =>
+  status === "active"
+    ? "bg-emerald-500/10 text-emerald-700"
+    : "bg-red-500/10 text-red-700";
+
 export function TeamTable({
   teamMembers,
   onDeleteMember,
   onBlockUser,
   onUnblockUser,
 }: TeamTableProps) {
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase();
-  };
-
-  const getRoleColor = (role: string) => {
-    return role === "Manager"
-      ? "bg-emerald-500/10 text-emerald-700"
-      : "bg-blue-500/10 text-blue-700";
-  };
-
   return (
     <Table>
       <TableHeader>
         <TableRow className="border-border hover:bg-transparent">
-          <TableHead className="text-foreground font-semibold">
-            Member
-          </TableHead>
-          <TableHead className="text-foreground font-semibold">Email</TableHead>
-          <TableHead className="text-foreground font-semibold">Role</TableHead>
-          <TableHead className="text-foreground font-semibold">
-            Status
-          </TableHead>
-          <TableHead className="text-foreground font-semibold">
-            Join Date
-          </TableHead>
-          <TableHead className="text-foreground font-semibold text-right">
-            Actions
-          </TableHead>
+          {["Member", "Email", "Role", "Status", "Join Date", "Actions"].map(
+            (h, i) => (
+              <TableHead
+                key={h}
+                className={`text-foreground font-semibold ${i === 5 ? "text-right" : ""}`}
+              >
+                {h}
+              </TableHead>
+            ),
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -91,52 +90,53 @@ export function TeamTable({
                 </span>
               </div>
             </TableCell>
+
             <TableCell className="text-muted-foreground">
               {member.email}
             </TableCell>
+
             <TableCell>
-              <Badge className={getRoleColor(member.role)}>{member.role}</Badge>
+              <Badge className={getRoleStyle(member.role)}>{member.role}</Badge>
             </TableCell>
+
             <TableCell>
-              <Badge
-                variant="secondary"
-                className="bg-emerald-500/10 text-emerald-700"
-              >
+              {/* ✅ Status badge now correctly reflects active vs blocked */}
+              <Badge className={getStatusStyle(member.status)}>
                 {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
               </Badge>
             </TableCell>
+
             <TableCell className="text-muted-foreground text-sm">
               {new Date(member.joinDate).toLocaleDateString("en-US", {
                 year: "numeric",
-                month: "short", // 'Jan', 'Feb', etc.
+                month: "short",
                 day: "numeric",
               })}
             </TableCell>
+
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-8 h-8 hover:bg-black/10 transition-colors"
-                  >
+                  <Button variant="ghost" size="icon" className="w-8 h-8">
                     <MoreHorizontal className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  {/* Add Block User option */}
-                  <DropdownMenuItem
-                    className="cursor-pointer text-destructive"
-                    onClick={() => onBlockUser(member.id)}
-                  >
-                    <Ban className="w-4 h-4 mr-2" />
-                    Block User
-                  </DropdownMenuItem>
+                  {/* ✅ Show Block only if currently active */}
+                  {member.status === "active" && (
+                    <DropdownMenuItem
+                      className="cursor-pointer text-destructive"
+                      onClick={() => onBlockUser(member.id)}
+                    >
+                      <Ban className="w-4 h-4 mr-2" />
+                      Block User
+                    </DropdownMenuItem>
+                  )}
 
-                  {/* Optional: Add Unblock User option (conditionally shown) */}
+                  {/* ✅ Show Unblock only if currently blocked */}
                   {member.status === "blocked" && (
                     <DropdownMenuItem
-                      className="cursor-pointer"
+                      className="cursor-pointer text-emerald-600"
                       onClick={() => onUnblockUser(member.id)}
                     >
                       <Unlock className="w-4 h-4 mr-2" />
@@ -144,10 +144,8 @@ export function TeamTable({
                     </DropdownMenuItem>
                   )}
 
-                  {/* Separator to group actions */}
                   <DropdownMenuSeparator />
 
-                  {/* Delete Member option */}
                   <DropdownMenuItem
                     className="text-destructive cursor-pointer"
                     onClick={() => onDeleteMember(member.id)}

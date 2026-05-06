@@ -1,84 +1,88 @@
-
+-- ================================
+-- EXTENSIONS
+-- ================================
+CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 
---    USERS TABLE
-
+-- ================================
+-- USERS TABLE
+-- ================================
 CREATE TABLE users (
-    -- Primary identifier
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-   
-    --    Authentication
-    email VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    -- AUTH
+    email CITEXT NOT NULL UNIQUE,
+    auth_provider VARCHAR(20) NOT NULL DEFAULT 'credentials',
+    password_hash VARCHAR(255),
 
-    --    Profile
-   
+    -- OAuth (future-safe)
+    provider_id TEXT,
+
+    -- PROFILE
     name VARCHAR(100) NOT NULL,
     company_name VARCHAR(100),
 
-    --    Roles & hierarchy
+    -- ROLES
     role VARCHAR(20) NOT NULL DEFAULT 'scales_man',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 
-
-    --    OTP: Email verification
+    -- EMAIL OTP
     email_otp VARCHAR(6),
-    email_otp_expires_at TIMESTAMP WITH TIME ZONE,
+    email_otp_expires_at TIMESTAMPTZ,
 
-
-    --    OTP: Password reset
-     
+    -- PASSWORD RESET OTP
     reset_password_otp VARCHAR(6),
-    reset_password_otp_expires_at TIMESTAMP WITH TIME ZONE,
+    reset_password_otp_expires_at TIMESTAMPTZ,
 
-  
-    --    Authentication tracking
-
-    last_login_at TIMESTAMP WITH TIME ZONE,
+    -- AUTH TRACKING
+    last_login_at TIMESTAMPTZ,
     login_count INTEGER NOT NULL DEFAULT 0,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-    last_failed_login_at TIMESTAMP WITH TIME ZONE,
+    last_failed_login_at TIMESTAMPTZ,
 
- 
-    --    Account status
- 
+    -- ACCOUNT STATUS
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
 
- 
-    --    Timestamps
+    -- TIMESTAMPS
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    -- ================================
+    -- CONSTRAINTS
+    -- ================================
 
-   
-    --    Constraints
-   
-    CONSTRAINT users_email_unique UNIQUE (email),
-    CONSTRAINT users_role_check CHECK (role IN ('admin', 'manager', 'scales_man'))
+    -- Role validation
+    CONSTRAINT users_role_check CHECK (
+        role IN ('admin', 'manager', 'scales_man')
+    ),
+
+    -- Auth validation (CRITICAL)
+    CONSTRAINT users_auth_check CHECK (
+        (auth_provider = 'credentials' AND password_hash IS NOT NULL)
+        OR
+        (auth_provider IN ('google', 'github'))
+    ),
+
+    -- Prevent empty email
+    CONSTRAINT users_email_not_empty CHECK (email <> '')
 );
 
 
+-- ================================
+-- INDEXES
+-- ================================
 
---    USERS INDEXES
-
-
--- Case-insensitive email lookup
-CREATE INDEX idx_users_email_lower ON users (LOWER(email));
-
--- Role filtering
 CREATE INDEX idx_users_role ON users (role);
-
--- Hierarchy lookups
 CREATE INDEX idx_users_created_by ON users (created_by);
-
--- Sorting / pagination
 CREATE INDEX idx_users_created_at ON users (created_at);
 
 
--- function to auto update user table 
+-- ================================
+-- TRIGGER: AUTO UPDATE TIMESTAMP
+-- ================================
+
 CREATE OR REPLACE FUNCTION update_user_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -93,9 +97,9 @@ FOR EACH ROW
 EXECUTE FUNCTION update_user_timestamp();
 
 
-
-
--- create user using db function
+-- ================================
+-- CREATE USER FUNCTION
+-- ================================
 
 CREATE OR REPLACE FUNCTION create_user_with_role(
     p_email VARCHAR,
@@ -103,7 +107,9 @@ CREATE OR REPLACE FUNCTION create_user_with_role(
     p_name VARCHAR,
     p_role VARCHAR DEFAULT NULL,
     p_company_name VARCHAR DEFAULT NULL,
-    p_created_by UUID DEFAULT NULL
+    p_created_by UUID DEFAULT NULL,
+    p_auth_provider VARCHAR DEFAULT 'credentials',
+    p_provider_id TEXT DEFAULT NULL
 )
 RETURNS TABLE(user_id UUID, otp VARCHAR) AS $$
 DECLARE
@@ -113,73 +119,65 @@ DECLARE
     v_expires_at TIMESTAMPTZ;
     v_admin_count INT;
 BEGIN
-    -- Count existing admins
+    -- Count admins
     SELECT COUNT(*) INTO v_admin_count FROM users WHERE role = 'admin';
 
-    -- Determine role
+    -- Role logic
     IF p_role IS NULL THEN
         IF v_admin_count = 0 THEN
-            p_role := 'admin'; -- first user becomes admin
+            p_role := 'admin';
         ELSE
-            RAISE EXCEPTION 'Role must be provided when creating users after the first admin';
+            RAISE EXCEPTION 'Role must be provided after first admin';
         END IF;
     END IF;
 
-    -- Validate role
     IF p_role NOT IN ('admin', 'manager', 'scales_man') THEN
         RAISE EXCEPTION 'Invalid role';
     END IF;
 
-    -- Prevent multiple admins
     IF p_role = 'admin' AND v_admin_count > 0 THEN
-        RAISE EXCEPTION 'An admin already exists. Only one admin allowed';
+        RAISE EXCEPTION 'Only one admin allowed';
     END IF;
 
-    -- Generate 6-digit OTP
+    -- OTP
     v_otp := LPAD(FLOOR(RANDOM() * 1000000)::TEXT, 6, '0');
 
-    -- Permission checks
+    -- Creator permission logic
     IF p_created_by IS NOT NULL THEN
-        -- Get creator role
-        SELECT role INTO v_creator_role FROM users WHERE id = p_created_by;
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Creator user not found';
-        END IF;
+        SELECT role INTO STRICT v_creator_role
+        FROM users
+        WHERE id = p_created_by;
 
-        -- Admin creation
         IF p_role = 'admin' AND v_creator_role != 'admin' THEN
-            RAISE EXCEPTION 'Only admins can create admin users';
+            RAISE EXCEPTION 'Only admin can create admin';
         END IF;
 
-        -- Manager creation
         IF p_role = 'manager' AND v_creator_role != 'admin' THEN
-            RAISE EXCEPTION 'Only admins can create manager users';
+            RAISE EXCEPTION 'Only admin can create manager';
         END IF;
 
-        -- Scales_man creation
         IF p_role = 'scales_man' AND v_creator_role NOT IN ('admin', 'manager') THEN
-            RAISE EXCEPTION 'Only admins or managers can create scales_man users';
+            RAISE EXCEPTION 'Invalid permission';
         END IF;
 
-        -- Set OTP expiry
-        IF v_creator_role = 'admin' THEN
-            v_expires_at := NOW() + INTERVAL '24 hours';
-        ELSE
-            v_expires_at := NOW() + INTERVAL '10 minutes';
-        END IF;
-
+        v_expires_at := CASE
+            WHEN v_creator_role = 'admin' THEN NOW() + INTERVAL '24 hours'
+            ELSE NOW() + INTERVAL '10 minutes'
+        END;
     ELSE
-        -- Bootstrap first admin
         IF p_role != 'admin' THEN
-            RAISE EXCEPTION 'Non-admin users must have a creator';
+            RAISE EXCEPTION 'First user must be admin';
         END IF;
+
         v_expires_at := NOW() + INTERVAL '10 minutes';
     END IF;
 
     -- Insert user
     INSERT INTO users (
         email,
+        auth_provider,
         password_hash,
+        provider_id,
         name,
         role,
         company_name,
@@ -188,8 +186,10 @@ BEGIN
         email_otp_expires_at
     )
     VALUES (
-        LOWER(p_email),
+        p_email,
+        p_auth_provider,
         p_password_hash,
+        p_provider_id,
         p_name,
         p_role,
         p_company_name,
@@ -199,24 +199,18 @@ BEGIN
     )
     RETURNING id INTO v_user_id;
 
-    -- Log activity
-    INSERT INTO user_activities (
-        user_id,
-        activity_type,
-        description
-    )
-    VALUES (v_user_id, 'account_created', 'User account created');
+    RETURN QUERY SELECT v_user_id, v_otp;
 
-    -- Return user_id and OTP
-    user_id := v_user_id;
-    otp := v_otp;
-    RETURN NEXT;
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE EXCEPTION 'Email already exists';
 END;
 $$ LANGUAGE plpgsql;
 
 
-
--- USER HIERARCHY VIEW
+-- ================================
+-- VIEW
+-- ================================
 
 CREATE VIEW user_hierarchy AS
 SELECT

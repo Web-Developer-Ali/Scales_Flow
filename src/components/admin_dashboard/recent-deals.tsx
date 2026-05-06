@@ -13,25 +13,24 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecentDealsProps } from "@/types/admin_dashboard_types";
 
-const getStageColor = (stage: string) => {
-  const colors: Record<string, string> = {
-    Prospect: "bg-slate-500/20 text-slate-300",
-    Qualified: "bg-blue-500/20 text-blue-300",
-    Demo: "bg-cyan-500/20 text-cyan-300",
-    Proposal: "bg-amber-500/20 text-amber-300",
-    Negotiation: "bg-orange-500/20 text-orange-300",
-    Closed: "bg-emerald-500/20 text-emerald-300",
-  };
-  return colors[stage] || "bg-gray-500/20 text-gray-300";
+// Keys match DB enum (lowercase)
+const STAGE_COLORS: Record<string, string> = {
+  prospect: "bg-slate-500/20 text-slate-300",
+  qualified: "bg-blue-500/20 text-blue-300",
+  demo: "bg-cyan-500/20 text-cyan-300",
+  negotiation: "bg-orange-500/20 text-orange-300",
+  closed: "bg-emerald-500/20 text-emerald-300",
 };
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("en-US", {
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(value);
-};
+
+const formatStageLabel = (stage: string) =>
+  stage.charAt(0).toUpperCase() + stage.slice(1);
 
 export function RecentDeals({
   data = [],
@@ -56,24 +55,23 @@ export function RecentDeals({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground">
-                      Company
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground">
-                      Contact
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground">
-                      Deal Value
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground">
-                      Stage
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-muted-foreground">
-                      Probability
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-muted-foreground">
-                      Days
-                    </th>
+                    {[
+                      "Company",
+                      "Contact",
+                      "Deal Value",
+                      "Stage",
+                      "Probability",
+                      "Days",
+                    ].map((h, i) => (
+                      <th
+                        key={h}
+                        className={`py-3 px-4 font-semibold text-muted-foreground ${
+                          i === 5 ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -86,14 +84,19 @@ export function RecentDeals({
                         {deal.company}
                       </td>
                       <td className="py-4 px-4 text-muted-foreground">
-                        {deal.contact}
+                        {deal.contact ?? "—"}
                       </td>
                       <td className="py-4 px-4 font-semibold text-primary">
-                        {formatCurrency(deal.value)}
+                        {formatCurrency(Number(deal.value))}
                       </td>
                       <td className="py-4 px-4">
-                        <Badge className={getStageColor(deal.stage)}>
-                          {deal.stage}
+                        <Badge
+                          className={
+                            STAGE_COLORS[deal.stage] ??
+                            "bg-gray-500/20 text-gray-300"
+                          }
+                        >
+                          {formatStageLabel(deal.stage)}
                         </Badge>
                       </td>
                       <td className="py-4 px-4">
@@ -110,7 +113,8 @@ export function RecentDeals({
                         </div>
                       </td>
                       <td className="py-4 px-4 text-right text-muted-foreground">
-                        {deal.daysInStage}d
+                        {/* API returns days_in_stage (snake_case) */}
+                        {Math.round(deal.days_in_stage ?? 0)}d
                       </td>
                     </tr>
                   ))}

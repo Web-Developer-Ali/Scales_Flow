@@ -20,15 +20,15 @@ export default function DashboardPage() {
           closedThisMonth={data?.metrics.closedThisMonth}
           targetProgress={data?.metrics.targetProgress}
           avgCloseTime={data?.metrics.avgCloseTime}
+          pipelineDelta={data?.metrics.pipelineDelta}
+          closedDelta={data?.metrics.closedDelta}
           isLoading={loading}
         />
 
-        {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           <div className="lg:col-span-2">
             <DealPipeline data={data?.pipelineByStage} isLoading={loading} />
           </div>
-
           <div className="lg:col-span-1">
             <TeamPerformance data={data?.teamPerformance} isLoading={loading} />
           </div>

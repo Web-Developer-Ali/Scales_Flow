@@ -6,111 +6,88 @@ import { authOptions } from "../../auth/[...nextauth]/options";
 import { sendRegistrationOtp } from "@/lib/email/otp-service";
 
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-
-    const creatorRole = session.user.role;
-
-    if (!["admin"].includes(creatorRole)) {
-      return NextResponse.json(
-        { success: false, error: "Permission denied" },
-        { status: 403 }
-      );
-    }
-
     const { email, password, name, role } = await req.json();
 
     if (!email || !password || !name || !role) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (!["admin", "manager", "scales_man"].includes(role)) {
+    // Admin can only create manager or scales_man — never another admin
+    if (!["manager", "scales_man"].includes(role)) {
       return NextResponse.json(
         { success: false, error: "Invalid role" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const password_hash = await bcrypt.hash(password, 10);
 
-    const sql = `
-      SELECT * FROM create_user_with_role(
-        $1, $2, $3, $4, $5, $6
-      );
-    `;
+    const { rows } = await query(
+      `SELECT * FROM create_user_with_role($1, $2, $3, $4, $5, $6)`,
+      [
+        email.toLowerCase().trim(),
+        password_hash,
+        name.trim(),
+        role,
+        null,
+        session.user.id,
+      ],
+    );
 
-    const values = [
-      email.toLowerCase(),
-      password_hash,
-      name,
-      role,
-      null,
-      session.user.id,
-    ];
-
-    const { rows } = await query(sql, values);
-
-    if (!rows || rows.length === 0) {
+    if (!rows?.length) {
       return NextResponse.json(
-        { success: false, message: "Failed to create user" },
-        { status: 500 }
+        { success: false, error: "Failed to create user" },
+        { status: 500 },
       );
     }
 
-    const user_id = rows[0].id;
-    const otp = rows[0].otp;
+    const { user_id, otp } = rows[0];
 
     if (!otp) {
       return NextResponse.json(
-        { success: false, message: "Failed to generate OTP" },
-        { status: 500 }
+        { success: false, error: "Failed to generate OTP" },
+        { status: 500 },
       );
     }
 
-    const verificationLink = `${
-      process.env.NEXTAUTH_URL
-    }/otp-verification?email=${encodeURIComponent(email)}`;
+    const verificationLink = `${process.env.NEXTAUTH_URL}/otp-verification?email=${encodeURIComponent(email)}`;
 
-    const sendOtpEmail = await sendRegistrationOtp(
+    const emailResult = await sendRegistrationOtp(
       email,
       role,
       otp,
-      verificationLink
+      verificationLink,
     );
 
-    if (!sendOtpEmail.success) {
+    if (!emailResult.success) {
       return NextResponse.json(
-        { success: false, message: sendOtpEmail.message },
-        { status: 500 }
+        { success: false, error: emailResult.message },
+        { status: 500 },
       );
     }
 
     return NextResponse.json({
       success: true,
-      message:
-        "User created successfully and email verification OTP sent to user.",
+      message: "User created. Verification OTP sent to their email.",
       userId: user_id,
-      otp: otp,
+      // ✅ OTP intentionally NOT returned — it was sent to user's email only
     });
   } catch (err) {
     console.error("Create User API Error:", err);
-
-    let message = "Server error";
-    if (err && typeof err === "object" && err !== null && "message" in err) {
-      message =
-        ((err as Record<string, unknown>).message as string) || "Server error";
-    }
-
+    const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json(
       { success: false, error: message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -6,6 +6,7 @@ import { getToken } from "next-auth/jwt";
 const PUBLIC_PATHS = [
   "/",
   "/login",
+  "/register_admin",
   "/signup",
   "/otp-verification",
   "/forgot-password",
@@ -54,7 +55,7 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith("/static") ||
     pathname.startsWith("/assets") ||
     /\.(png|jpg|jpeg|gif|webp|svg|css|js|ico|woff|woff2|ttf|json)$/i.test(
-      pathname
+      pathname,
     )
   ) {
     return NextResponse.next();
@@ -69,7 +70,7 @@ export async function proxy(req: NextRequest) {
   const isPublicNonAuthPage = PUBLIC_PATHS.some(
     (path) =>
       !AUTH_PAGES.has(path) &&
-      (pathname === path || pathname.startsWith(path + "/"))
+      (pathname === path || pathname.startsWith(path + "/")),
   );
 
   if (isPublicNonAuthPage) {
@@ -104,7 +105,7 @@ export async function proxy(req: NextRequest) {
       const dashboardPath = ROLE_DASHBOARDS[role] || "/dashboard";
       console.log(
         "✅ Authenticated user on auth page, redirecting to:",
-        dashboardPath
+        dashboardPath,
       );
       return NextResponse.redirect(new URL(dashboardPath, req.url));
     }
@@ -130,7 +131,7 @@ export async function proxy(req: NextRequest) {
         const dashboardPath = ROLE_DASHBOARDS[role] || "/dashboard";
         console.log(
           `❌ Role '${role}' denied access to '${routePrefix}', redirecting to:`,
-          dashboardPath
+          dashboardPath,
         );
         return NextResponse.redirect(new URL(dashboardPath, req.url));
       }
