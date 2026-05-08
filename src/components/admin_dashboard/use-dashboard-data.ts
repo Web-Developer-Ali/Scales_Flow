@@ -1,10 +1,10 @@
 "use client";
 
-import { DashboardData } from "@/types/admin_dashboard_types";
+import { DashboardApiResponse } from "@/types/admin_dashboard_types";
 import { useEffect, useState } from "react";
 
 export function useDashboardData() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,13 +19,13 @@ export function useDashboardData() {
         // Dynamically import axios only when needed
         const axios = (await import("axios")).default;
 
-        const response = await axios.get<DashboardData>(
+        const response = await axios.get<DashboardApiResponse>(
           "/api/admin/dashboard",
           {
             timeout: 10000,
-          }
+          },
         );
-
+        console.log(response.data);
         if (response.status !== 200 || !response.data) {
           throw new Error("Unexpected response from server");
         }
