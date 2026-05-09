@@ -1,69 +1,157 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  Legend,
+} from "recharts";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { StageBreakdown, MonthlyTrend } from "./use-rep-dashboard";
 
-const pipelineData = [
-  { stage: "Prospect", deals: 8, value: 120 },
-  { stage: "Qualified", deals: 6, value: 210 },
-  { stage: "Demo", deals: 5, value: 245 },
-  { stage: "Proposal", deals: 3, value: 180 },
-  { stage: "Negotiation", deals: 2, value: 145 },
-]
+interface Props {
+  stageBreakdown?: StageBreakdown[];
+  monthlyTrend?: MonthlyTrend[];
+  isLoading?: boolean;
+}
 
-const progressData = [
-  { week: "Week 1", target: 8, actual: 7 },
-  { week: "Week 2", target: 8, actual: 9 },
-  { week: "Week 3", target: 8, actual: 6 },
-  { week: "Week 4", target: 8, actual: 8 },
-  { week: "Current", target: 8, actual: 4 },
-]
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function RepPipeline() {
+const STAGE_COLORS: Record<string, string> = {
+  prospect: "#64748b",
+  qualified: "#3b82f6",
+  demo: "#06b6d4",
+  negotiation: "#f59e0b",
+  closed: "#10b981",
+};
+
+export function RepPipeline({
+  stageBreakdown = [],
+  monthlyTrend = [],
+  isLoading = false,
+}: Props) {
+  // Recharts needs plain objects with display labels
+  const stageData = stageBreakdown.map((s) => ({
+    stage: capitalize(s.stage),
+    deals: Number(s.deal_count),
+    value: Number(s.stage_value),
+    fill: STAGE_COLORS[s.stage] ?? "#6b7280",
+  }));
+
+  const trendData = monthlyTrend.map((t) => ({
+    month: t.month_label,
+    Won: Number(t.won_count),
+    Active: Number(t.active_count),
+  }));
+
   return (
     <Card className="bg-card border-border">
       <CardHeader>
         <CardTitle>Your Pipeline by Stage</CardTitle>
-        <CardDescription>Active deals at each stage of the sales cycle</CardDescription>
+        <CardDescription>
+          Active deals at each stage of your sales cycle
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={pipelineData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="stage" stroke="var(--muted-foreground)" fontSize={12} />
-            <YAxis stroke="var(--muted-foreground)" />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--card)",
-                border: `1px solid var(--border)`,
-                borderRadius: "8px",
-              }}
-            />
-            <Bar dataKey="deals" name="Deal Count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-
-        {/* Weekly Performance */}
-        <div className="mt-8">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Weekly Target Progress</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={progressData}>
+        {isLoading ? (
+          <Skeleton className="w-full h-[250px]" />
+        ) : stageData.length === 0 ? (
+          <div className="h-[250px] flex items-center justify-center">
+            <p className="text-sm text-muted-foreground">
+              No active deals this month yet.
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={stageData}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="week" stroke="var(--muted-foreground)" fontSize={12} />
+              <XAxis
+                dataKey="stage"
+                stroke="var(--muted-foreground)"
+                fontSize={12}
+              />
               <YAxis stroke="var(--muted-foreground)" />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "var(--card)",
-                  border: `1px solid var(--border)`,
+                  border: "1px solid var(--border)",
                   borderRadius: "8px",
+                  color: "var(--foreground)",
                 }}
               />
-              <Line type="monotone" dataKey="target" stroke="#f59e0b" name="Target" strokeWidth={2} />
-              <Line type="monotone" dataKey="actual" stroke="#3b82f6" name="Actual" strokeWidth={2} />
-            </LineChart>
+              <Bar
+                dataKey="deals"
+                name="Deal Count"
+                radius={[8, 8, 0, 0]}
+                // Per-bar color from our STAGE_COLORS map
+                fill="#3b82f6"
+              />
+            </BarChart>
           </ResponsiveContainer>
+        )}
+
+        {/* Monthly trend — last 6 months */}
+        <div className="mt-8">
+          <h3 className="text-sm font-semibold text-foreground mb-4">
+            6-Month Performance Trend
+          </h3>
+          {isLoading ? (
+            <Skeleton className="w-full h-[200px]" />
+          ) : trendData.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Not enough history yet.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="month"
+                  stroke="var(--muted-foreground)"
+                  fontSize={12}
+                />
+                <YAxis stroke="var(--muted-foreground)" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--foreground)",
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="Won"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Active"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
