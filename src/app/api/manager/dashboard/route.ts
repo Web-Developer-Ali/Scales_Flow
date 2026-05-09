@@ -29,8 +29,7 @@ export async function GET() {
       my_team AS (
         SELECT id, name
         FROM users
-        WHERE created_by = $1
-          AND role = 'scales_man'
+        WHERE manager_id = $1 AND role = 'scales_man'
           AND is_active = true
       ),
 

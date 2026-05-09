@@ -26,6 +26,7 @@ CREATE TABLE users (
     -- ROLES
     role VARCHAR(20) NOT NULL DEFAULT 'scales_man',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    manager_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
     -- EMAIL OTP
     email_otp VARCHAR(6),
@@ -77,7 +78,9 @@ CREATE TABLE users (
 CREATE INDEX idx_users_role ON users (role);
 CREATE INDEX idx_users_created_by ON users (created_by);
 CREATE INDEX idx_users_created_at ON users (created_at);
-
+CREATE INDEX IF NOT EXISTS idx_users_manager_id
+ON users (manager_id)
+WHERE manager_id IS NOT NULL;
 
 -- ================================
 -- TRIGGER: AUTO UPDATE TIMESTAMP
@@ -95,6 +98,21 @@ CREATE TRIGGER trigger_update_user_timestamp
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION update_user_timestamp();
+
+-- ================================
+-- BACKFILL: SET MANAGER_ID FOR EXISTING SCALES_MAN USERS
+-- ================================
+
+-- Set manager_id = created_by for existing scales_man users
+-- (only where created_by is actually a manager)
+UPDATE users u
+SET manager_id = u.created_by
+WHERE u.role = 'scales_man'
+  AND EXISTS (
+    SELECT 1 FROM users creator
+    WHERE creator.id = u.created_by
+      AND creator.role = 'manager'
+  );
 
 
 -- ================================
