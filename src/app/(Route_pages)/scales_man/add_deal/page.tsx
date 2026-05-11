@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,266 +13,304 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowLeft, Plus, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
+
+// ── Matches DB enum exactly ────────────────────────────────────────────────────
+const STAGES = [
+  { value: "prospect", label: "Prospect" },
+  { value: "qualified", label: "Qualified" },
+  { value: "demo", label: "Demo" },
+  { value: "negotiation", label: "Negotiation" },
+  { value: "closed", label: "Closed" },
+] as const;
+
+// Default probability per stage — auto-fills when stage changes
+const STAGE_PROBABILITY: Record<string, number> = {
+  prospect: 10,
+  qualified: 30,
+  demo: 50,
+  negotiation: 75,
+  closed: 100,
+};
+
+interface FormData {
+  title: string;
+  company: string;
+  contact_person: string;
+  contact_email: string;
+  contact_phone: string;
+  value: string;
+  stage: string;
+  probability: string;
+  expected_close_date: string;
+  description: string;
+  currency: string;
+}
+
+const INITIAL_FORM: FormData = {
+  title: "",
+  company: "",
+  contact_person: "",
+  contact_email: "",
+  contact_phone: "",
+  value: "",
+  stage: "prospect",
+  probability: "10",
+  expected_close_date: "",
+  description: "",
+  currency: "USD",
+};
 
 export default function AddDealPage() {
   const router = useRouter();
+
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    company: "",
-    contact: "",
-    email: "",
-    phone: "",
-    dealValue: "",
-    stage: "Prospect",
-    probability: "20",
-    closingDate: "",
-    description: "",
-    nextAction: "Call",
-  });
-
-  const stages = [
-    "Prospect",
-    "Qualified",
-    "Demo",
-    "Proposal",
-    "Negotiation",
-    "Closed Won",
-  ];
-  const actions = [
-    "Call",
-    "Email",
-    "Meeting",
-    "Follow-up",
-    "Demo",
-    "Proposal",
-    "Negotiation",
-    "Contract",
-    "Other",
-  ];
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  const handleInput = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleSelect = (name: keyof FormData, value: string) => {
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      // Auto-fill probability when stage changes
+      if (name === "stage") {
+        next.probability = String(STAGE_PROBABILITY[value] ?? prev.probability);
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    // Validation
-    if (
-      !formData.company ||
-      !formData.contact ||
-      !formData.email ||
-      !formData.dealValue
-    ) {
-      alert("Please fill in all required fields");
+    // Client-side validation
+    if (!formData.title.trim()) {
+      setError("Deal title is required");
+      return;
+    }
+    if (!formData.company.trim()) {
+      setError("Company name is required");
+      return;
+    }
+    if (!formData.contact_email.trim()) {
+      setError("Contact email is required");
+      return;
+    }
+    if (!formData.value || parseFloat(formData.value) <= 0) {
+      setError("Enter a valid deal value greater than 0");
       return;
     }
 
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      console.log("New Deal Created:", formData);
-      alert("Deal created successfully!");
-      router.push("/rep/deals");
-    }, 1000);
-  };
 
-  const handleCancel = () => {
-    router.back();
+    try {
+      const { data } = await axios.post("/api/deals/create", {
+        ...formData,
+        value: parseFloat(formData.value),
+        probability: parseInt(formData.probability),
+      });
+
+      if (!data.success) throw new Error(data.error);
+
+      // Redirect to deals list on success
+      router.push("/rep/deals");
+      router.refresh();
+    } catch (err) {
+      setError(
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? err.response.data.error
+          : "Failed to create deal. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <main className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-border bg-card/50">
-        <div className="max-w-3xl mx-auto px-6 py-6">
-          <div className="flex items-center gap-4 mb-6">
-            <Button
-              onClick={handleCancel}
-              variant="outline"
-              size="sm"
-              className="hover:bg-secondary bg-transparent"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          </div>
-
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Create New Deal
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Add a new opportunity to your pipeline and start tracking it
-              through your sales process
-            </p>
-          </div>
+      <div className="border-b border-border bg-card/50 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 py-5">
+          <Button
+            onClick={() => router.back()}
+            variant="outline"
+            size="sm"
+            className="mb-4 bg-transparent hover:bg-secondary"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="text-3xl font-bold text-foreground">
+            Create New Deal
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Add a new opportunity to your pipeline
+          </p>
         </div>
       </div>
 
       {/* Form */}
       <div className="max-w-3xl mx-auto px-6 py-8">
-        <form onSubmit={handleSubmit}>
-          {/* Company & Contact Information */}
-          <Card className="bg-card border-border mb-6">
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* ── Company & Contact ─────────────────────────────────────── */}
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Company Information</CardTitle>
+              <CardTitle>Company & Contact</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Deal Title <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    name="title"
+                    placeholder="e.g., Acme Corp — SEO Retainer"
+                    value={formData.title}
+                    onChange={handleInput}
+                    className="bg-background border-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
                     Company Name <span className="text-red-500">*</span>
                   </label>
                   <Input
                     name="company"
                     placeholder="e.g., Acme Corporation"
                     value={formData.company}
-                    onChange={handleInputChange}
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Primary Contact <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    name="contact"
-                    placeholder="e.g., John Smith"
-                    value={formData.contact}
-                    onChange={handleInputChange}
-                    className="bg-background border-border text-foreground"
+                    onChange={handleInput}
+                    className="bg-background border-border"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Email <span className="text-red-500">*</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Contact Person
                   </label>
                   <Input
-                    name="email"
+                    name="contact_person"
+                    placeholder="e.g., John Smith"
+                    value={formData.contact_person}
+                    onChange={handleInput}
+                    className="bg-background border-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Contact Email <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    name="contact_email"
                     type="email"
                     placeholder="e.g., john@acme.com"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Phone
-                  </label>
-                  <Input
-                    name="phone"
-                    placeholder="e.g., (555) 123-4567"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="bg-background border-border text-foreground"
+                    value={formData.contact_email}
+                    onChange={handleInput}
+                    className="bg-background border-border"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Deal Description
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Contact Phone
                 </label>
-                <Textarea
-                  name="description"
-                  placeholder="Describe the deal, what they need, any specific requirements..."
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  className="bg-background border-border text-foreground placeholder:text-muted-foreground resize-none"
-                  rows={3}
+                <Input
+                  name="contact_phone"
+                  placeholder="e.g., +1 (555) 123-4567"
+                  value={formData.contact_phone}
+                  onChange={handleInput}
+                  className="bg-background border-border"
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Deal Details */}
-          <Card className="bg-card border-border mb-6">
+          {/* ── Deal Details ───────────────────────────────────────────── */}
+          <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle>Deal Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Deal Value <span className="text-red-500">*</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Deal Value (USD) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                       $
                     </span>
                     <Input
-                      name="dealValue"
+                      name="value"
                       type="number"
+                      min="1"
+                      step="0.01"
                       placeholder="0.00"
-                      value={formData.dealValue}
-                      onChange={handleInputChange}
-                      className="bg-background border-border text-foreground pl-7"
+                      value={formData.value}
+                      onChange={handleInput}
+                      className="bg-background border-border pl-7"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Expected Closing Date
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Expected Close Date
                   </label>
                   <Input
-                    name="closingDate"
+                    name="expected_close_date"
                     type="date"
-                    value={formData.closingDate}
-                    onChange={handleInputChange}
-                    className="bg-background border-border text-foreground"
+                    value={formData.expected_close_date}
+                    onChange={handleInput}
+                    className="bg-background border-border"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
                     Stage <span className="text-red-500">*</span>
                   </label>
                   <Select
                     value={formData.stage}
-                    onValueChange={(value) =>
-                      handleSelectChange("stage", value)
-                    }
+                    onValueChange={(v) => handleSelect("stage", v)}
                   >
-                    <SelectTrigger className="bg-background border-border text-foreground">
+                    <SelectTrigger className="bg-background border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {stages.map((stage) => (
-                        <SelectItem key={stage} value={stage}>
-                          {stage}
+                      {STAGES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Close Probability (%){" "}
-                    <span className="text-red-500">*</span>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Close Probability (%)
+                    <span className="text-red-500"> *</span>
                   </label>
                   <Input
                     name="probability"
@@ -281,62 +318,50 @@ export default function AddDealPage() {
                     min="0"
                     max="100"
                     value={formData.probability}
-                    onChange={handleInputChange}
-                    className="bg-background border-border text-foreground"
+                    onChange={handleInput}
+                    className="bg-background border-border"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Auto-filled from stage — adjust if needed
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Next Action Needed <span className="text-red-500">*</span>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Description
                 </label>
-                <Select
-                  value={formData.nextAction}
-                  onValueChange={(value) =>
-                    handleSelectChange("nextAction", value)
-                  }
-                >
-                  <SelectTrigger className="bg-background border-border text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {actions.map((action) => (
-                      <SelectItem key={action} value={action}>
-                        {action}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Textarea
+                  name="description"
+                  placeholder="What does this client need? Any specific requirements, context, or notes..."
+                  value={formData.description}
+                  onChange={handleInput}
+                  className="bg-background border-border resize-none"
+                  rows={4}
+                />
               </div>
             </CardContent>
           </Card>
 
-          {/* Form Actions */}
+          {/* ── Actions ───────────────────────────────────────────────── */}
           <div className="flex gap-3">
-            <Button
-              type="submit"
-              className="flex-1 bg-black hover:bg-black/80"
-              disabled={isSubmitting}
-            >
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
               <Plus className="w-4 h-4 mr-2" />
-              {isSubmitting ? "Creating Deal..." : "Create Deal"}
+              {isSubmitting ? "Creating..." : "Create Deal"}
             </Button>
             <Button
               type="button"
-              onClick={handleCancel}
+              onClick={() => router.back()}
               variant="outline"
               className="flex-1 bg-transparent"
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
           </div>
 
-          {/* Help Text */}
-          <p className="text-xs text-muted-foreground mt-6 text-center">
-            <span className="text-red-500">*</span> Indicates required fields.
-            All deals must have company, contact, email, deal value, and stage
-            information.
+          <p className="text-xs text-muted-foreground text-center">
+            <span className="text-red-500">*</span> Required fields
           </p>
         </form>
       </div>
