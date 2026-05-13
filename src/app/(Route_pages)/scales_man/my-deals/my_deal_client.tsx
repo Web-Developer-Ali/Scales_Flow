@@ -118,7 +118,7 @@ export function MyDealsClient() {
               </p>
             </div>
             <Button
-              onClick={() => router.push("/scales_man/add_deal")}
+              onClick={() => router.push("/deals/add_deal")}
               className="gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -312,9 +312,7 @@ export function MyDealsClient() {
             {deals.map((deal) => (
               <div
                 key={deal.id}
-                onClick={() =>
-                  router.push(`/scales_man/deal_details/${deal.id}`)
-                }
+                onClick={() => router.push(`/deals/deal_details/${deal.id}`)}
                 className="p-5 rounded-lg bg-card border border-border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
               >
                 <div className="flex items-start justify-between gap-4">

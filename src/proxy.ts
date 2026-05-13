@@ -2,16 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// ===== CONFIGURATION =====
-const PUBLIC_PATHS = [
+// ── Public pages — no auth needed ─────────────────────────────────────────────
+const PUBLIC_PATHS = new Set([
   "/",
-  "/login",
-  "/register_admin",
-  "/signup",
-  "/otp-verification",
-  "/forgot-password",
-  "/reset-password",
-  "/verify-email",
   "/about",
   "/contact",
   "/privacy",
@@ -20,134 +13,139 @@ const PUBLIC_PATHS = [
   "/docs",
   "/blog",
   "/features",
-];
+]);
 
+// ── Auth pages — redirect to dashboard if already logged in ───────────────────
 const AUTH_PAGES = new Set([
   "/login",
   "/signup",
+  "/register_admin",
   "/otp-verification",
   "/forgot-password",
   "/reset-password",
   "/verify-email",
 ]);
 
-// Role-based dashboard mapping
+// ── Where each role lands after login ─────────────────────────────────────────
 const ROLE_DASHBOARDS: Record<string, string> = {
   admin: "/admin/dashboard",
   manager: "/manager/dashboard",
   scales_man: "/scales_man/dashboard",
 };
 
-// ✅ Define which roles can access which route prefixes
+// ── Which roles can access which route prefix ─────────────────────────────────
 const ROLE_ACCESS: Record<string, string[]> = {
   "/admin": ["admin"],
   "/manager": ["manager"],
   "/scales_man": ["scales_man"],
 };
 
-// ===== MIDDLEWARE =====
+// ── Pages that require email verification ─────────────────────────────────────
+// All protected routes require verification — unverified users go to OTP page
+const VERIFY_EXEMPT = new Set(["/otp-verification", "/login", "/logout"]);
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 1. Skip static assets and Next.js internals
+  // 1. Skip Next.js internals and static files — matcher handles most of this
+  //    but double-check for safety
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/static") ||
-    pathname.startsWith("/assets") ||
-    /\.(png|jpg|jpeg|gif|webp|svg|css|js|ico|woff|woff2|ttf|json)$/i.test(
+    /\.(png|jpg|jpeg|gif|webp|svg|ico|css|js|woff|woff2|ttf|json)$/i.test(
       pathname,
     )
   ) {
     return NextResponse.next();
   }
 
-  // 2. Always allow API routes
+  // 2. Always allow API routes — API handlers do their own auth checks
   if (pathname.startsWith("/api")) {
     return NextResponse.next();
   }
 
-  // 3. Check if it's a public non-auth page
-  const isPublicNonAuthPage = PUBLIC_PATHS.some(
-    (path) =>
-      !AUTH_PAGES.has(path) &&
-      (pathname === path || pathname.startsWith(path + "/")),
-  );
-
-  if (isPublicNonAuthPage) {
+  // 3. Allow pure public pages immediately
+  if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
-  // 4. Get authentication token
-  let token;
+  // 4. Get JWT token
+  let token: Awaited<ReturnType<typeof getToken>>;
   try {
-    token = await getToken({
-      req,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
-  } catch (error) {
-    console.error("❌ Middleware: Error getting token:", error);
-    if (!AUTH_PAGES.has(pathname)) {
-      return NextResponse.redirect(new URL("/login", req.url));
-    }
-    return NextResponse.next();
+    token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  } catch {
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  console.log("🔍 Middleware:", {
-    path: pathname,
-    hasToken: !!token,
-    role: token?.role,
-  });
-
-  // 5. Handle auth pages
+  // 5. Handle auth pages (login, signup, etc.)
+  //    Logged-in users should not see these — redirect to their dashboard
   if (AUTH_PAGES.has(pathname)) {
     if (token) {
       const role = token.role as string;
-      const dashboardPath = ROLE_DASHBOARDS[role] || "/dashboard";
-      console.log(
-        "✅ Authenticated user on auth page, redirecting to:",
-        dashboardPath,
-      );
-      return NextResponse.redirect(new URL(dashboardPath, req.url));
+      const dashboard = ROLE_DASHBOARDS[role] ?? "/login";
+      return NextResponse.redirect(new URL(dashboard, req.url));
     }
     return NextResponse.next();
   }
 
-  // 6. Not authenticated → redirect to login
+  // 6. Everything below this line requires authentication
   if (!token) {
-    console.log("❌ Unauthenticated user, redirecting to login");
     const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    // Preserve full path + query so user returns to where they were
+    loginUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 7. ✅ NEW: Role-based access control with strict enforcement
   const role = token.role as string;
+  const isVerified = token.is_verified as boolean;
+  const isActive = token.is_active as boolean;
 
-  // Check each protected route prefix
-  for (const [routePrefix, allowedRoles] of Object.entries(ROLE_ACCESS)) {
-    if (pathname.startsWith(routePrefix)) {
+  // 7. Blocked users — force logout regardless of where they are
+  if (isActive === false) {
+    const logoutUrl = new URL("/login", req.url);
+    logoutUrl.searchParams.set("error", "account_blocked");
+    // Clear session cookie by redirecting — actual cookie clearing
+    // happens in the login page when it reads the error param
+    const res = NextResponse.redirect(logoutUrl);
+    res.cookies.delete("next-auth.session-token");
+    res.cookies.delete("__Secure-next-auth.session-token");
+    return res;
+  }
+
+  // 8. Unverified users — redirect to OTP verification
+  //    unless they're already on the verification page
+  if (isVerified === false && !VERIFY_EXEMPT.has(pathname)) {
+    const verifyUrl = new URL("/otp-verification", req.url);
+    verifyUrl.searchParams.set("email", (token.email as string) ?? "");
+    return NextResponse.redirect(verifyUrl);
+  }
+
+  // 9. Role-based access control
+  //    Check each protected prefix and enforce role
+  for (const [prefix, allowedRoles] of Object.entries(ROLE_ACCESS)) {
+    if (pathname.startsWith(prefix)) {
       if (!allowedRoles.includes(role)) {
-        // User doesn't have access to this route
-        const dashboardPath = ROLE_DASHBOARDS[role] || "/dashboard";
-        console.log(
-          `❌ Role '${role}' denied access to '${routePrefix}', redirecting to:`,
-          dashboardPath,
-        );
-        return NextResponse.redirect(new URL(dashboardPath, req.url));
+        const dashboard = ROLE_DASHBOARDS[role] ?? "/login";
+        return NextResponse.redirect(new URL(dashboard, req.url));
       }
-      // User has access
-      console.log(`✅ Role '${role}' granted access to '${routePrefix}'`);
+      // Correct role — allow through
       return NextResponse.next();
     }
   }
 
-  // 8. Allow access to other routes (like shared pages, profile, etc.)
-  console.log("✅ Allowing access to shared route:", pathname);
+  // 10. Authenticated but no specific role restriction — allow
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
+    /*
+     * Match all paths EXCEPT:
+     * - _next/static
+     * - _next/image
+     * - favicon.ico
+     * - static file extensions
+     */
+    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
   ],
 };
