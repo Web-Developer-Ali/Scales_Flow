@@ -8,10 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
 import { Trash2, MoreHorizontal, Ban, Unlock } from "lucide-react";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,16 +27,19 @@ interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: string; // "Manager" | "Sales Rep"
-  status: string; // "active" | "blocked"
+  role: string;
+  status: string;
   joinDate: string;
 }
 
 interface TeamTableProps {
   teamMembers: TeamMember[];
-  onDeleteMember: (id: string) => void;
-  onBlockUser: (id: string) => void;
-  onUnblockUser: (id: string) => void;
+
+  onDeleteMember: (id: string, name: string) => void;
+
+  onBlockUser: (id: string, name: string) => void;
+
+  onUnblockUser: (id: string, name: string) => void;
 }
 
 const getInitials = (name: string) =>
@@ -67,7 +73,9 @@ export function TeamTable({
             (h, i) => (
               <TableHead
                 key={h}
-                className={`text-foreground font-semibold ${i === 5 ? "text-right" : ""}`}
+                className={`text-foreground font-semibold ${
+                  i === 5 ? "text-right" : ""
+                }`}
               >
                 {h}
               </TableHead>
@@ -75,6 +83,7 @@ export function TeamTable({
           )}
         </TableRow>
       </TableHeader>
+
       <TableBody>
         {teamMembers.map((member) => (
           <TableRow key={member.id} className="border-border hover:bg-muted/50">
@@ -85,6 +94,7 @@ export function TeamTable({
                     {getInitials(member.name)}
                   </AvatarFallback>
                 </Avatar>
+
                 <span className="font-medium text-foreground">
                   {member.name}
                 </span>
@@ -100,7 +110,6 @@ export function TeamTable({
             </TableCell>
 
             <TableCell>
-              {/* ✅ Status badge now correctly reflects active vs blocked */}
               <Badge className={getStatusStyle(member.status)}>
                 {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
               </Badge>
@@ -121,23 +130,22 @@ export function TeamTable({
                     <MoreHorizontal className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent align="end" className="w-48">
-                  {/* ✅ Show Block only if currently active */}
                   {member.status === "active" && (
                     <DropdownMenuItem
                       className="cursor-pointer text-destructive"
-                      onClick={() => onBlockUser(member.id)}
+                      onClick={() => onBlockUser(member.id, member.name)}
                     >
                       <Ban className="w-4 h-4 mr-2" />
                       Block User
                     </DropdownMenuItem>
                   )}
 
-                  {/* ✅ Show Unblock only if currently blocked */}
                   {member.status === "blocked" && (
                     <DropdownMenuItem
                       className="cursor-pointer text-emerald-600"
-                      onClick={() => onUnblockUser(member.id)}
+                      onClick={() => onUnblockUser(member.id, member.name)}
                     >
                       <Unlock className="w-4 h-4 mr-2" />
                       Unblock User
@@ -148,7 +156,7 @@ export function TeamTable({
 
                   <DropdownMenuItem
                     className="text-destructive cursor-pointer"
-                    onClick={() => onDeleteMember(member.id)}
+                    onClick={() => onDeleteMember(member.id, member.name)}
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete Member

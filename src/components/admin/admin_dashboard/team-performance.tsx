@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TeamPerformanceProps } from "@/types/admin_dashboard_types";
+import { TeamPerformanceProps } from "@/types/admin/admin_dashboard_types";
 
 const getInitials = (name: string) => {
   return name

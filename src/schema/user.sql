@@ -217,6 +217,26 @@ BEGIN
     )
     RETURNING id INTO v_user_id;
 
+    -- ADD ACTIVITY LOGGING (Only for manager and scales_man)
+    IF p_role IN ('manager', 'scales_man') THEN
+        INSERT INTO user_activities (
+            user_id,
+            performed_by,
+            activity_type,
+            description,
+            entity_type,
+            entity_id
+        )
+        VALUES (
+            v_user_id,                           -- The user who was created
+            p_created_by,                        -- Who performed the action
+            'user_created',                            -- Using existing 'insert' activity type
+            CONCAT(p_role, ' created: ', p_name, ' (', p_email, ')'),
+            'user',                              -- Entity type
+            v_user_id                            -- The new user's ID
+        );
+    END IF;
+
     RETURN QUERY SELECT v_user_id, v_otp;
 
 EXCEPTION

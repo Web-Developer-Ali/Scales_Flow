@@ -1,11 +1,11 @@
 "use client";
 
-import { DashboardHeader } from "@/components/admin_dashboard/dashboard-header";
-import { DealPipeline } from "@/components/admin_dashboard/deal-pipeline";
-import { RecentDeals } from "@/components/admin_dashboard/recent-deals";
-import { SalesMetrics } from "@/components/admin_dashboard/sales-metrics";
-import { TeamPerformance } from "@/components/admin_dashboard/team-performance";
-import { useDashboardData } from "@/components/admin_dashboard/use-dashboard-data";
+import { DashboardHeader } from "@/components/admin/admin_dashboard/dashboard-header";
+import { DealPipeline } from "@/components/admin/admin_dashboard/deal-pipeline";
+import { RecentDeals } from "@/components/admin/admin_dashboard/recent-deals";
+import { SalesMetrics } from "@/components/admin/admin_dashboard/sales-metrics";
+import { TeamPerformance } from "@/components/admin/admin_dashboard/team-performance";
+import { useDashboardData } from "@/components/admin/admin_dashboard/use-dashboard-data";
 
 export default function DashboardPage() {
   const { data, loading } = useDashboardData();

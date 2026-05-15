@@ -3,7 +3,7 @@
 import type React from "react";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -19,8 +19,6 @@ import { toast } from "sonner";
 // Changed from `export function login()` to `export default function LoginPage()`
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -99,16 +97,12 @@ export default function LoginPage() {
 
       if (result?.ok) {
         toast.success("Login successful!");
-
         if (formData.rememberMe) {
           localStorage.setItem("rememberedEmail", formData.email);
         } else {
           localStorage.removeItem("rememberedEmail");
         }
-
-        setTimeout(() => {
-          window.location.href = callbackUrl;
-        }, 1000);
+        router.refresh();
       } else {
         // Generic error message for security
         const errorMsg = "Invalid email or password. Please try again.";
@@ -118,29 +112,6 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Login error:", error);
       toast.error("An error occurred. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Optional: Add resend OTP function for email verification errors
-  const handleResendOTP = async (email: string) => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      if (response.ok) {
-        toast.success("Verification email sent! Please check your inbox.");
-      } else {
-        toast.error("Failed to resend verification email. Please try again.");
-      }
-    } catch (error) {
-      console.error("Resend OTP error:", error);
-      toast.error("Failed to resend verification email.");
     } finally {
       setIsLoading(false);
     }

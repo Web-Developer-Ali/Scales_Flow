@@ -19,7 +19,7 @@ import {
   Cell,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DealPipelineProps } from "@/types/admin_dashboard_types";
+import { DealPipelineProps } from "@/types/admin/admin_dashboard_types";
 
 const STAGE_COLORS: Record<string, string> = {
   prospect: "#9333ea",

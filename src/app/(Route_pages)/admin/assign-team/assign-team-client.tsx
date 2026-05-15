@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -21,22 +20,9 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TeamManagementHeader } from "@/components/addTeamMember_admin/team-management-header";
+import { TeamManagementHeader } from "@/components/admin/addTeamMember_admin/team-management-header";
 import { Users, AlertCircle, CheckCircle2, UserMinus } from "lucide-react";
-
-interface Manager {
-  id: string;
-  name: string;
-  email: string;
-}
-
-interface Rep {
-  id: string;
-  name: string;
-  email: string;
-  manager_id: string | null;
-  is_active: boolean;
-}
+import { Manager, Rep } from "@/types/admin/assign_team";
 
 const getInitials = (name: string) =>
   name
@@ -49,7 +35,7 @@ export function AssignTeamClient() {
   const [managers, setManagers] = useState<Manager[]>([]);
   const [reps, setReps] = useState<Rep[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null); // repId being saved
+  const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -112,7 +98,7 @@ export function AssignTeamClient() {
           : `${rep?.name} unassigned`,
       );
 
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError(
         axios.isAxiosError(err) && err.response?.data?.error

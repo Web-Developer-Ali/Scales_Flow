@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UserPlus, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-
+import { toast } from "sonner";
 const formSchema = z.object({
   name: z
     .string()
@@ -46,7 +46,7 @@ const formSchema = z.object({
     .min(8, "Password must be at least 8 characters")
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      "Password must contain uppercase, lowercase, and number"
+      "Password must contain uppercase, lowercase, and number",
     ),
   role: z.enum(["manager", "scales_man"]),
 });
@@ -96,7 +96,7 @@ export function CreateTeamMemberDialog({
             response.data.message ||
             "Team member created successfully! Verification email sent.",
         });
-
+        toast.success(response.data.message);
         setTimeout(() => {
           form.reset();
           setOpen(false);
@@ -254,7 +254,6 @@ export function CreateTeamMemberDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="manager">Manager</SelectItem>
                       <SelectItem value="scales_man">Sales Rep</SelectItem>
                     </SelectContent>

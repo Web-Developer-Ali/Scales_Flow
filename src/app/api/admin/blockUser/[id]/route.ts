@@ -83,7 +83,10 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      message: action === "block" ? "User blocked" : "User unblocked",
+      message:
+        action === "block"
+          ? "User blocked successfully"
+          : "User unblocked successfully",
       user: updated[0],
     });
   } catch (err) {

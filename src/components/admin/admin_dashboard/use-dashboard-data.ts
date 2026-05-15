@@ -1,6 +1,6 @@
 "use client";
 
-import { DashboardApiResponse } from "@/types/admin_dashboard_types";
+import { DashboardApiResponse } from "@/types/admin/admin_dashboard_types";
 import { useEffect, useState } from "react";
 
 export function useDashboardData() {

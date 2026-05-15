@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RecentDealsProps } from "@/types/admin_dashboard_types";
+import { RecentDealsProps } from "@/types/admin/admin_dashboard_types";
 
 // Keys match DB enum (lowercase)
 const STAGE_COLORS: Record<string, string> = {

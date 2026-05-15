@@ -9,7 +9,7 @@ import {
   Clock,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SalesMetricsProps } from "@/types/admin_dashboard_types";
+import { SalesMetricsProps } from "@/types/admin/admin_dashboard_types";
 
 function formatDelta(delta: number | null | undefined): {
   label: string;

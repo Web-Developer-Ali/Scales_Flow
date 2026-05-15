@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS deals (
 
     title               VARCHAR(255)  NOT NULL,
     company             VARCHAR(255)  NOT NULL,
-
+    description         TEXT,
     contact_person      VARCHAR(120),
     contact_email       VARCHAR(150),
     contact_phone       VARCHAR(30),
