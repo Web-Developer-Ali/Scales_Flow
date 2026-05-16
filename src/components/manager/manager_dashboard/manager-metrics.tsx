@@ -1,19 +1,13 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Target,
-  Zap,
-  Clock,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, Users, Target, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { RepMetricsData } from "./use-rep-dashboard";
+import { ManagerDashboardData } from "@/types/manager/dashboard";
 
 interface Props {
-  metrics?: RepMetricsData;
+  personal?: ManagerDashboardData["personal"];
+  team?: ManagerDashboardData["team"];
   isLoading?: boolean;
 }
 
@@ -26,59 +20,56 @@ function formatDelta(delta: number | null | undefined) {
   };
 }
 
-const formatCurrency = (val: number) => `$${(val / 1_000).toFixed(0)}K`;
+export function ManagerMetrics({ personal, team, isLoading = false }: Props) {
+  const pipelineFmt = formatDelta(team?.pipelineDelta);
 
-export function RepMetrics({ metrics, isLoading = false }: Props) {
-  const pipelineFmt = formatDelta(metrics?.pipelineDelta);
-  const closedFmt = formatDelta(metrics?.closedDelta);
-
-  const cards = [
+  const metrics = [
     {
-      title: "My Pipeline",
-      value: formatCurrency(metrics?.pipelineValue ?? 0),
+      title: "Team Pipeline",
+      value: `$${((team?.pipeline ?? 0) / 1_000).toFixed(0)}K`,
       change: pipelineFmt.label,
       positive: pipelineFmt.positive,
-      icon: DollarSign,
+      icon: TrendingUp,
       color: "bg-blue-500/10 text-blue-500",
     },
     {
-      title: "Closed This Month",
-      value: formatCurrency(metrics?.closedValue ?? 0),
-      change: closedFmt.label,
-      positive: closedFmt.positive,
-      icon: TrendingUp,
+      title: "Direct Reports",
+      value: `${team?.size ?? 0}`,
+      change: `${team?.closedCount ?? 0} deals closed this month`,
+      positive: true,
+      icon: Users,
       color: "bg-emerald-500/10 text-emerald-500",
     },
     {
-      title: "My Target",
-      value: `${metrics?.closedCount ?? 0} / ${metrics?.target ?? 0}`,
-      change: `${metrics?.targetPercent ?? 0}% completion`,
-      positive: (metrics?.targetPercent ?? 0) >= 50,
+      title: "Team Target",
+      value: `${team?.closedCount ?? 0} / ${team?.target ?? 0}`,
+      change: `${team?.targetPercent ?? 0}% completion`,
+      positive: (team?.targetPercent ?? 0) >= 50,
       icon: Target,
       color: "bg-amber-500/10 text-amber-500",
     },
     {
-      title: "Hot Leads",
-      value: `${metrics?.hotLeads ?? 0}`,
-      change: "Deals with 60%+ probability",
+      title: "My Pipeline",
+      value: `$${((personal?.pipeline ?? 0) / 1_000).toFixed(0)}K`,
+      change: `${personal?.closedCount ?? 0} deals closed personally`,
       positive: true,
       icon: Zap,
-      color: "bg-red-500/10 text-red-500",
+      color: "bg-purple-500/10 text-purple-500",
     },
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {cards.map((card) => {
-        const Icon = card.icon;
-        const DeltaIcon = card.positive ? TrendingUp : TrendingDown;
+      {metrics.map((metric) => {
+        const Icon = metric.icon;
+        const DeltaIcon = metric.positive ? TrendingUp : TrendingDown;
         return (
-          <Card key={card.title} className="bg-card border-border">
+          <Card key={metric.title} className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
+                {metric.title}
               </CardTitle>
-              <div className={`p-2 rounded-lg ${card.color}`}>
+              <div className={`p-2 rounded-lg ${metric.color}`}>
                 <Icon className="w-4 h-4" />
               </div>
             </CardHeader>
@@ -88,15 +79,15 @@ export function RepMetrics({ metrics, isLoading = false }: Props) {
               ) : (
                 <>
                   <div className="text-2xl font-bold text-foreground">
-                    {card.value}
+                    {metric.value}
                   </div>
                   <p
                     className={`text-xs mt-1 flex items-center gap-1 ${
-                      card.positive ? "text-emerald-500" : "text-red-500"
+                      metric.positive ? "text-emerald-500" : "text-red-500"
                     }`}
                   >
                     <DeltaIcon className="w-3 h-3" />
-                    {card.change}
+                    {metric.change}
                   </p>
                 </>
               )}

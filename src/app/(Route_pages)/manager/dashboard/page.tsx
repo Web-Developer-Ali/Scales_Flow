@@ -1,11 +1,11 @@
 "use client";
 
-import { ManagerDashboardHeader } from "@/components/manager_dashboard/manager-dashboard-header";
-import { ManagerMetrics } from "@/components/manager_dashboard/manager-metrics";
-import { PersonalPipeline } from "@/components/manager_dashboard/personal-pipeline";
-import { TeamActivities } from "@/components/manager_dashboard/team-activities";
-import { TeamOverview } from "@/components/manager_dashboard/team-overview";
-import { useManagerDashboard } from "@/components/manager_dashboard/use-manager-dashboard";
+import { ManagerDashboardHeader } from "@/components/manager/manager_dashboard/manager-dashboard-header";
+import { ManagerMetrics } from "@/components/manager/manager_dashboard/manager-metrics";
+import { PersonalPipeline } from "@/components/manager/manager_dashboard/personal-pipeline";
+import { TeamActivities } from "@/components/manager/manager_dashboard/team-activities";
+import { TeamOverview } from "@/components/manager/manager_dashboard/team-overview";
+import { useManagerDashboard } from "@/components/manager/manager_dashboard/use-manager-dashboard";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 

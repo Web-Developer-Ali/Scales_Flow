@@ -10,7 +10,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { TeamRecentDeal } from "./use-manager-dashboard";
+import { TeamRecentDeal } from "@/types/manager/dashboard";
 
 interface Props {
   data?: TeamRecentDeal[];

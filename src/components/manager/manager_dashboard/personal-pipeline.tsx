@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { MyDeal } from "./use-manager-dashboard";
+import { MyDeal } from "@/types/manager/dashboard";
 
 interface Props {
   deals?: MyDeal[];

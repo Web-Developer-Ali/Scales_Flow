@@ -25,7 +25,7 @@ import {
   X,
   ArrowUpDown,
 } from "lucide-react";
-import { useMyDeals } from "@/components/my-deals-forScaleRep/use-my-deals";
+import { useMyDeals } from "@/components/scales_man/my-deals-forScaleRep/use-my-deals";
 
 // ── Constants matching DB enum exactly ────────────────────────────────────────
 const STAGES = [

@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { RepPerformance } from "./use-manager-dashboard";
+import { RepPerformance } from "@/types/manager/dashboard";
 
 interface Props {
   data?: RepPerformance[];

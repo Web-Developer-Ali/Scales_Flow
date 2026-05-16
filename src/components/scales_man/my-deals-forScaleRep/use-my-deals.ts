@@ -2,39 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-
-export interface Deal {
-  id: string;
-  title: string;
-  company: string;
-  contact_person: string | null;
-  contact_email: string | null;
-  value: number;
-  stage: string;
-  status: string;
-  probability: number;
-  expected_close_date: string | null;
-  description: string | null;
-  days_in_stage: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DealsStats {
-  totalDeals: number;
-  totalPipeline: number;
-  avgProbability: number;
-  expectedRevenue: number;
-  wonCount: number;
-  activeCount: number;
-}
-
-export interface Filters {
-  stage: string;
-  status: string;
-  search: string;
-  sort: string;
-}
+import { Deal, DealsStats, Filters } from "@/types/scales_man/my-deals";
 
 const DEFAULT_FILTERS: Filters = {
   stage: "all",

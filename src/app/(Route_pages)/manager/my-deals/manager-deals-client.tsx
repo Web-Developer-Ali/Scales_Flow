@@ -26,7 +26,7 @@ import {
   Users,
   Percent,
 } from "lucide-react";
-import { useManagerDeals } from "@/components/manager/use-manager-deals";
+import { useManagerDeals } from "@/components/manager/my-deals/use-manager-deals";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STAGES = [

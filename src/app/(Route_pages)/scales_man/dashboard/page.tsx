@@ -1,13 +1,13 @@
 "use client";
 
-import { RepDashboardHeader } from "@/components/salesRep_dashboard/rep-dashboard-header";
-import { RepMetrics } from "@/components/salesRep_dashboard/rep-metrics";
-import { RepPipeline } from "@/components/salesRep_dashboard/rep-pipeline";
-import { useRepDashboard } from "@/components/salesRep_dashboard/use-rep-dashboard";
+import { RepDashboardHeader } from "@/components/scales_man/salesRep_dashboard/rep-dashboard-header";
+import { RepMetrics } from "@/components/scales_man/salesRep_dashboard/rep-metrics";
+import { RepPipeline } from "@/components/scales_man/salesRep_dashboard/rep-pipeline";
+import { useRepDashboard } from "@/components/scales_man/salesRep_dashboard/use-rep-dashboard";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RepRecentDeals } from "@/components/salesRep_dashboard/recent-deals";
-import { NeedsAttention } from "@/components/salesRep_dashboard/needs-attention";
+import { RepRecentDeals } from "@/components/scales_man/salesRep_dashboard/recent-deals";
+import { NeedsAttention } from "@/components/scales_man/salesRep_dashboard/needs-attention";
 
 export default function RepDashboardPage() {
   const { data, loading, error } = useRepDashboard();
