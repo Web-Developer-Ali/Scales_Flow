@@ -20,9 +20,9 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TeamManagementHeader } from "@/components/admin/addTeamMember_admin/team-management-header";
 import { Users, AlertCircle, CheckCircle2, UserMinus } from "lucide-react";
 import { Manager, Rep } from "@/types/admin/assign_team";
+import { AdminNavbar } from "@/components/admin/navbar";
 
 const getInitials = (name: string) =>
   name
@@ -120,7 +120,7 @@ export function AssignTeamClient() {
 
   return (
     <main className="min-h-screen bg-background">
-      <TeamManagementHeader />
+      <AdminNavbar />
 
       <div className="px-6 py-8 max-w-7xl mx-auto">
         {/* Alerts */}

@@ -1,6 +1,5 @@
 "use client";
-
-import { DashboardHeader } from "@/components/admin/admin_dashboard/dashboard-header";
+import { AdminNavbar } from "@/components/admin/navbar";
 import { DealPipeline } from "@/components/admin/admin_dashboard/deal-pipeline";
 import { RecentDeals } from "@/components/admin/admin_dashboard/recent-deals";
 import { SalesMetrics } from "@/components/admin/admin_dashboard/sales-metrics";
@@ -12,7 +11,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-background">
-      <DashboardHeader />
+      <AdminNavbar />
 
       <div className="px-6 py-8">
         <SalesMetrics

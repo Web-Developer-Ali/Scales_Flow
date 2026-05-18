@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { TeamManagementHeader } from "@/components/admin/addTeamMember_admin/team-management-header";
 import { CreateTeamMemberDialog } from "@/components/admin/addTeamMember_admin/create-team-member-dialog";
 import { TeamTable } from "@/components/admin/addTeamMember_admin/team-table";
 import { useRouter } from "next/navigation";
@@ -43,6 +42,7 @@ import {
   Summary,
   TeamMember,
 } from "@/types/admin/add_member";
+import { AdminNavbar } from "@/components/admin/navbar";
 
 export function TeamManagementPageClient() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -250,7 +250,7 @@ export function TeamManagementPageClient() {
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background">
-        <TeamManagementHeader />
+        <AdminNavbar />
 
         <div className="px-6 py-8 flex flex-col items-center justify-center h-64 gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
@@ -295,7 +295,7 @@ export function TeamManagementPageClient() {
 
   return (
     <main className="min-h-screen bg-background">
-      <TeamManagementHeader />
+      <AdminNavbar />
 
       {/* Confirm Dialog */}
       <AlertDialog
