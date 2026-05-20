@@ -27,6 +27,7 @@ import {
   Percent,
 } from "lucide-react";
 import { useManagerDeals } from "@/components/manager/my-deals/use-manager-deals";
+import { ManagerDashboardHeader } from "@/components/manager/manager_dashboard/manager-dashboard-header";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STAGES = [
@@ -122,6 +123,7 @@ export function ManagerDealsClient() {
   return (
     <main className="min-h-screen bg-background">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <ManagerDashboardHeader />
       <div className="border-b border-border bg-card/50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="mb-6">
