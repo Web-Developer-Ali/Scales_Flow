@@ -25,7 +25,7 @@ function formatDelta(delta: number | null | undefined): {
 export function SalesMetrics({
   totalPipeline = 0,
   closedThisMonth = 0,
-  targetProgress = { closed: 0, target: 0, percent: 0 },
+  targetProgress = { closed: 0, total: 0, percent: 0 },
   avgCloseTime = 0,
   pipelineDelta,
   closedDelta,
@@ -34,10 +34,17 @@ export function SalesMetrics({
   const pipelineFmt = formatDelta(pipelineDelta);
   const closedFmt = formatDelta(closedDelta);
 
+  function formatAmount(val: number): string {
+    if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+    if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
+    if (val > 0) return `$${val.toFixed(0)}`;
+    return "$0";
+  }
+
   const metrics = [
     {
       title: "Total Pipeline",
-      value: `$${(totalPipeline / 1_000_000).toFixed(1)}M`,
+      value: formatAmount(totalPipeline),
       change: pipelineFmt.label,
       positive: pipelineFmt.positive,
       icon: DollarSign,
@@ -45,7 +52,7 @@ export function SalesMetrics({
     },
     {
       title: "Closed This Month",
-      value: `$${(closedThisMonth / 1_000).toFixed(0)}K`,
+      value: formatAmount(closedThisMonth),
       change: closedFmt.label,
       positive: closedFmt.positive,
       icon: TrendingUp,
@@ -53,28 +60,32 @@ export function SalesMetrics({
     },
     {
       title: "Deal Target",
-      value: `${targetProgress.closed} / ${targetProgress.target}`,
-      change: `${targetProgress.percent}% of monthly target`,
+      // closed out of total created this month — real numbers
+      value: `${targetProgress.closed} / ${targetProgress.total}`,
+      change:
+        targetProgress.total > 0
+          ? `${targetProgress.percent}% of deals closed this month`
+          : "No deals created yet",
       positive: targetProgress.percent >= 50,
       icon: Target,
       color: "bg-amber-500/10 text-amber-500",
     },
     {
       title: "Avg. Close Time",
-      value: `${avgCloseTime} days`,
-      // No prior-month avg returned from API yet — neutral display
+      value: avgCloseTime > 0 ? `${avgCloseTime} days` : "—",
       change: "Days from open to won",
       positive: true,
       icon: Clock,
       color: "bg-purple-500/10 text-purple-500",
     },
-  ];
+  ] as const;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {metrics.map((metric) => {
         const Icon = metric.icon;
         const DeltaIcon = metric.positive ? TrendingUp : TrendingDown;
+
         return (
           <Card key={metric.title} className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

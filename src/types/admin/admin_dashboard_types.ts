@@ -1,23 +1,23 @@
 // @/types/admin_dashboard_types.ts
 
 export interface TargetProgress {
-  closed: number;
-  target: number;
+  closed: number; // remove optional + null — these always come from API
+  total: number; // was "target" hardcoded, now real count
   percent: number;
 }
 
 export interface SalesMetricsProps {
   totalPipeline?: number;
   closedThisMonth?: number;
-  targetProgress?: TargetProgress;
+  targetProgress?: TargetProgress; // the prop itself is optional (loading state)
   avgCloseTime?: number;
-  pipelineDelta?: number | null; // real % change vs last month
-  closedDelta?: number | null; // real % change vs last month
+  pipelineDelta?: number | null;
+  closedDelta?: number | null;
   isLoading?: boolean;
 }
 
 export interface PipelineStage {
-  stage: string; // lowercase — matches DB enum: prospect | qualified | demo | negotiation | closed
+  stage: string;
   count: number;
 }
 
@@ -30,7 +30,8 @@ export interface TeamMember {
   id: string;
   name: string;
   closed_deals: number;
-  total_value: number; // snake_case — direct from API
+  total_value: number;
+  total_assigned: number;
 }
 
 export interface TeamPerformanceProps {
@@ -41,12 +42,12 @@ export interface TeamPerformanceProps {
 export interface RecentDeal {
   id: string;
   company: string;
-  contact: string | null; // contact_person aliased as contact in SQL
+  contact: string | null;
   value: number;
   status: string;
-  stage: string; // lowercase — matches DB enum
+  stage: string;
   probability: number;
-  days_in_stage: number; // computed in SQL: EXTRACT(EPOCH FROM ...) / 86400
+  days_in_stage: number;
   assigned_to: string | null;
   created_at: string;
 }
@@ -56,7 +57,6 @@ export interface RecentDealsProps {
   isLoading?: boolean;
 }
 
-// Shape of the full API response from /api/admin/dashboard
 export interface DashboardMetrics {
   totalPipeline: number;
   closedThisMonth: number;
