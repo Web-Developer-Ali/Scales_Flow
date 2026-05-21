@@ -79,21 +79,21 @@ export function AssignTeamClient() {
       if (!data.success) throw new Error(data.error);
 
       // Optimistic update
+      const resolvedManagerId =
+        managerId === "unassigned" ? null : managerId;
+      const rep = reps.find((r) => r.id === repId);
+      const manager = resolvedManagerId
+        ? managers.find((m) => m.id === resolvedManagerId)
+        : undefined;
+
       setReps((prev) =>
         prev.map((r) =>
-          r.id === repId
-            ? {
-                ...r,
-                manager_id: managerId === "unassigned" ? null : managerId,
-              }
-            : r,
+          r.id === repId ? { ...r, manager_id: resolvedManagerId } : r,
         ),
       );
 
-      const rep = reps.find((r) => r.id === repId);
-      const manager = managers.find((m) => m.id === managerId);
       setSuccess(
-        managerId && managerId !== "unassigned"
+        resolvedManagerId
           ? `${rep?.name} assigned to ${manager?.name}`
           : `${rep?.name} unassigned`,
       );

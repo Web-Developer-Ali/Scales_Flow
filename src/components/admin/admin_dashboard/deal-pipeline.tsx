@@ -73,7 +73,7 @@ export function DealPipeline({
                     borderRadius: "8px",
                     color: "var(--foreground)",
                   }}
-                  labelFormatter={formatStageLabel}
+                  labelFormatter={(label) => formatStageLabel(String(label))}
                 />
                 <Legend formatter={formatStageLabel} />
                 <Bar dataKey="count" name="Deal Count" radius={[8, 8, 0, 0]}>

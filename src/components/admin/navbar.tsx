@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { BarChart3, Users, UserCog, LogOut, Menu, X, Bell } from "lucide-react";
+import { BarChart3, Users, UserCog, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -90,10 +90,6 @@ export function AdminNavbar() {
 
         {/* Right Section */}
         <div className="flex items-center gap-2 sm:gap-4">
-          <button className="p-2 hover:bg-muted rounded-lg transition-colors hidden sm:flex items-center justify-center">
-            <Bell className="w-5 h-5 text-muted-foreground" />
-          </button>
-
           <Button
             variant="outline"
             onClick={handleLogout}
