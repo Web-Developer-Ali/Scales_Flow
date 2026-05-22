@@ -11,6 +11,14 @@ interface Props {
   isLoading?: boolean;
 }
 
+// Smart formatter — never shows $0K for small values
+function formatAmount(val: number): string {
+  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
+  if (val > 0) return `$${val.toFixed(0)}`;
+  return "$0";
+}
+
 function formatDelta(delta: number | null | undefined) {
   if (delta === null || delta === undefined)
     return { label: "No prior data", positive: true };
@@ -22,11 +30,12 @@ function formatDelta(delta: number | null | undefined) {
 
 export function ManagerMetrics({ personal, team, isLoading = false }: Props) {
   const pipelineFmt = formatDelta(team?.pipelineDelta);
+  const closedFmt = formatDelta(team?.closedDelta);
 
   const metrics = [
     {
       title: "Team Pipeline",
-      value: `$${((team?.pipeline ?? 0) / 1_000).toFixed(0)}K`,
+      value: formatAmount(team?.pipeline ?? 0),
       change: pipelineFmt.label,
       positive: pipelineFmt.positive,
       icon: TrendingUp,
@@ -35,23 +44,27 @@ export function ManagerMetrics({ personal, team, isLoading = false }: Props) {
     {
       title: "Direct Reports",
       value: `${team?.size ?? 0}`,
-      change: `${team?.closedCount ?? 0} deals closed this month`,
+      change: `${team?.closedCount ?? 0} deal${(team?.closedCount ?? 0) !== 1 ? "s" : ""} closed this month`,
       positive: true,
       icon: Users,
       color: "bg-emerald-500/10 text-emerald-500",
     },
     {
       title: "Team Target",
-      value: `${team?.closedCount ?? 0} / ${team?.target ?? 0}`,
-      change: `${team?.targetPercent ?? 0}% completion`,
+      // closed out of total created this month — real numbers, no hardcoded 20
+      value: `${team?.closedCount ?? 0} / ${team?.totalCreated ?? 0}`,
+      change:
+        (team?.totalCreated ?? 0) > 0
+          ? `${team?.targetPercent ?? 0}% of deals closed this month`
+          : "No deals created yet",
       positive: (team?.targetPercent ?? 0) >= 50,
       icon: Target,
       color: "bg-amber-500/10 text-amber-500",
     },
     {
       title: "My Pipeline",
-      value: `$${((personal?.pipeline ?? 0) / 1_000).toFixed(0)}K`,
-      change: `${personal?.closedCount ?? 0} deals closed personally`,
+      value: formatAmount(personal?.pipeline ?? 0),
+      change: `${personal?.closedCount ?? 0} deal${(personal?.closedCount ?? 0) !== 1 ? "s" : ""} closed personally`,
       positive: true,
       icon: Zap,
       color: "bg-purple-500/10 text-purple-500",

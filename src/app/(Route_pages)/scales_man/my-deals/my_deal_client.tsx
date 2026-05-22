@@ -26,6 +26,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { useMyDeals } from "@/components/scales_man/my-deals-forScaleRep/use-my-deals";
+import { RepDashboardHeader } from "@/components/scales_man/navbar";
 
 // ── Constants matching DB enum exactly ────────────────────────────────────────
 const STAGES = [
@@ -108,6 +109,7 @@ export function MyDealsClient() {
   return (
     <main className="min-h-screen bg-background">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <RepDashboardHeader />
       <div className="border-b border-border bg-card/50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between mb-6">

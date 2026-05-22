@@ -15,7 +15,6 @@ import { RepPerformance } from "@/types/manager/dashboard";
 
 interface Props {
   data?: RepPerformance[];
-  target: number;
   isLoading?: boolean;
 }
 
@@ -26,33 +25,35 @@ const getInitials = (name: string) =>
     .join("")
     .toUpperCase();
 
-const formatCurrency = (val: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(val);
+// Smart formatter — no $0 for small values
+function formatAmount(val: number): string {
+  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
+  if (val > 0) return `$${val.toFixed(0)}`;
+  return "$0";
+}
 
-function getStatus(closed: number, target: number) {
-  const pct = (closed / target) * 100;
+function getStatus(closed: number, total: number) {
+  if (total === 0)
+    return { label: "No Deals", className: "bg-gray-500/10 text-gray-500" };
+  const pct = (closed / total) * 100;
   if (pct >= 100)
     return {
       label: "Exceeding",
       className: "bg-emerald-500/10 text-emerald-600",
     };
-  if (pct >= 70)
+  if (pct >= 60)
     return { label: "On Track", className: "bg-blue-500/10 text-blue-600" };
   return { label: "At Risk", className: "bg-red-500/10 text-red-600" };
 }
 
-export function TeamOverview({ data = [], target, isLoading = false }: Props) {
+export function TeamOverview({ data = [], isLoading = false }: Props) {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
         <CardTitle>Team Overview</CardTitle>
         <CardDescription>
-          Direct reports — deals closed this month vs target
+          Direct reports — deals closed vs total assigned this month
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -72,11 +73,12 @@ export function TeamOverview({ data = [], target, isLoading = false }: Props) {
         ) : (
           <div className="space-y-6">
             {data.map((rep) => {
-              const pct = Math.min(
-                (Number(rep.closed_deals) / target) * 100,
-                100,
-              );
-              const status = getStatus(Number(rep.closed_deals), target);
+              const total = Number(rep.total_assigned) || 0;
+              const closed = Number(rep.closed_deals) || 0;
+              const value = Number(rep.total_value) || 0;
+              const pct = total > 0 ? Math.min((closed / total) * 100, 100) : 0;
+              const status = getStatus(closed, total);
+
               return (
                 <div
                   key={rep.id}
@@ -94,7 +96,7 @@ export function TeamOverview({ data = [], target, isLoading = false }: Props) {
                           {rep.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCurrency(Number(rep.total_value))} revenue
+                          {formatAmount(value)} revenue
                         </p>
                       </div>
                     </div>
@@ -103,10 +105,11 @@ export function TeamOverview({ data = [], target, isLoading = false }: Props) {
                   <div>
                     <div className="flex justify-between mb-1">
                       <span className="text-xs text-muted-foreground">
-                        {rep.closed_deals} / {target} deals
+                        {/* Real: closed / total assigned this month */}
+                        {closed} / {total} deals
                       </span>
                       <span className="text-xs font-semibold text-primary">
-                        {pct.toFixed(0)}%
+                        {total > 0 ? `${pct.toFixed(0)}%` : "—"}
                       </span>
                     </div>
                     <Progress value={pct} className="h-2" />

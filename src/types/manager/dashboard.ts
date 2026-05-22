@@ -2,6 +2,7 @@ export interface RepPerformance {
   id: string;
   name: string;
   closed_deals: number;
+  total_assigned: number;
   total_value: number;
 }
 
@@ -43,7 +44,7 @@ export interface ManagerDashboardData {
     pipeline: number;
     closedValue: number;
     closedCount: number;
-    target: number;
+    totalCreated: number;
     targetPercent: number;
     pipelineDelta: number | null;
     closedDelta: number | null;

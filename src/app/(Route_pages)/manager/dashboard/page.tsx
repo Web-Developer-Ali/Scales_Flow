@@ -34,7 +34,6 @@ export default function ManagerDashboardPage() {
           <div className="lg:col-span-2">
             <TeamOverview
               data={data?.repPerformance}
-              target={data?.team.target ?? 20}
               isLoading={loading}
             />
           </div>

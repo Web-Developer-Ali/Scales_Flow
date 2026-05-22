@@ -19,17 +19,22 @@ import { cn } from "@/lib/utils";
 const navItems = [
   {
     label: "Dashboard",
-    href: "/manager/dashboard",
+    href: "/scales_man/dashboard",
     icon: LayoutDashboard,
   },
   {
     label: "My Deals",
-    href: "/manager/my-deals",
+    href: "/scales_man/my-deals",
+    icon: Users,
+  },
+  {
+    label: "Add Deal",
+    href: "/deals/add_deal",
     icon: Users,
   },
 ];
 
-export function ManagerDashboardHeader() {
+export function RepDashboardHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

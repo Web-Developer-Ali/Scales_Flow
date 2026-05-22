@@ -41,6 +41,7 @@ export interface RepMetricsData {
   avgCloseTime: number;
   hotLeads: number;
   target: number;
+  totalCreated: number;
   targetPercent: number;
   pipelineDelta: number | null;
   closedDelta: number | null;

@@ -9,11 +9,19 @@ import {
   Zap,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { RepMetricsData } from "./use-rep-dashboard";
+import { RepMetricsData } from "@/types/scales_man/dashboard";
 
 interface Props {
   metrics?: RepMetricsData;
   isLoading?: boolean;
+}
+
+// Smart formatter — never shows $0K for small values
+function formatAmount(val: number): string {
+  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
+  if (val > 0) return `$${val.toFixed(0)}`;
+  return "$0";
 }
 
 function formatDelta(delta: number | null | undefined) {
@@ -25,8 +33,6 @@ function formatDelta(delta: number | null | undefined) {
   };
 }
 
-const formatCurrency = (val: number) => `$${(val / 1_000).toFixed(0)}K`;
-
 export function RepMetrics({ metrics, isLoading = false }: Props) {
   const pipelineFmt = formatDelta(metrics?.pipelineDelta);
   const closedFmt = formatDelta(metrics?.closedDelta);
@@ -34,7 +40,7 @@ export function RepMetrics({ metrics, isLoading = false }: Props) {
   const cards = [
     {
       title: "My Pipeline",
-      value: formatCurrency(metrics?.pipelineValue ?? 0),
+      value: formatAmount(metrics?.pipelineValue ?? 0),
       change: pipelineFmt.label,
       positive: pipelineFmt.positive,
       icon: DollarSign,
@@ -42,7 +48,7 @@ export function RepMetrics({ metrics, isLoading = false }: Props) {
     },
     {
       title: "Closed This Month",
-      value: formatCurrency(metrics?.closedValue ?? 0),
+      value: formatAmount(metrics?.closedValue ?? 0),
       change: closedFmt.label,
       positive: closedFmt.positive,
       icon: TrendingUp,
@@ -50,8 +56,12 @@ export function RepMetrics({ metrics, isLoading = false }: Props) {
     },
     {
       title: "My Target",
-      value: `${metrics?.closedCount ?? 0} / ${metrics?.target ?? 0}`,
-      change: `${metrics?.targetPercent ?? 0}% completion`,
+      // Real: closed out of total created this month
+      value: `${metrics?.closedCount ?? 0} / ${metrics?.totalCreated ?? 0}`,
+      change:
+        (metrics?.totalCreated ?? 0) > 0
+          ? `${metrics?.targetPercent ?? 0}% of deals closed this month`
+          : "No deals created yet",
       positive: (metrics?.targetPercent ?? 0) >= 50,
       icon: Target,
       color: "bg-amber-500/10 text-amber-500",
