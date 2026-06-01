@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,14 @@ const STATUS_STYLES: Record<string, string> = {
   "on-hold": "bg-gray-500/10 text-gray-400 border-gray-500/20",
 };
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function formatAmount(val: number): string {
+  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
+  if (val > 0) return `$${val.toFixed(0)}`;
+  return "$0";
+}
+
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -108,6 +117,11 @@ const getProbabilityColor = (prob: number) =>
 // ── Component ──────────────────────────────────────────────────────────────────
 export function ManagerDealsClient() {
   const router = useRouter();
+  const session = useSession();
+
+  // Manager's own user ID — used to label their own deals and sidebar row
+  const managerId = session.data?.user?.id ?? "";
+
   const {
     deals,
     reps,
@@ -124,16 +138,17 @@ export function ManagerDealsClient() {
     <main className="min-h-screen bg-background">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <ManagerDashboardHeader />
+
       <div className="border-b border-border bg-card/50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-foreground">Team Deals</h1>
             <p className="text-muted-foreground mt-1">
-              All deals across your team — filter by rep, stage, or status
+              All deals across your team — filter by member, stage, or status
             </p>
           </div>
 
-          {/* ── Stats ─────────────────────────────────────────────────── */}
+          {/* ── Stats strip ─────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
@@ -144,13 +159,13 @@ export function ManagerDealsClient() {
                 {[
                   {
                     label: "Team Pipeline",
-                    value: formatCurrency(stats?.totalPipeline ?? 0),
+                    value: formatAmount(stats?.totalPipeline ?? 0),
                     icon: DollarSign,
                     color: "text-blue-500",
                   },
                   {
                     label: "Active Deals",
-                    value: stats?.activeCount ?? 0,
+                    value: String(stats?.activeCount ?? 0),
                     icon: TrendingUp,
                     color: "text-emerald-500",
                   },
@@ -162,7 +177,7 @@ export function ManagerDealsClient() {
                   },
                   {
                     label: "Expected Revenue",
-                    value: formatCurrency(stats?.expectedRevenue ?? 0),
+                    value: formatAmount(stats?.expectedRevenue ?? 0),
                     icon: Target,
                     color: "text-purple-500",
                   },
@@ -193,7 +208,7 @@ export function ManagerDealsClient() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* ── Left: Rep sidebar ──────────────────────────────────────── */}
+          {/* ── Left: Team sidebar ─────────────────────────────────────── */}
           <div className="lg:col-span-1">
             <div className="rounded-lg bg-card border border-border p-4 sticky top-6">
               <div className="flex items-center gap-2 mb-4">
@@ -211,11 +226,11 @@ export function ManagerDealsClient() {
                 </div>
               ) : reps.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">
-                  No reps assigned to you yet.
+                  No members assigned yet.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {/* All reps option */}
+                  {/* All members option */}
                   <button
                     onClick={() => updateFilter("rep", "all")}
                     className={`w-full text-left p-3 rounded-lg text-sm transition-colors border
@@ -225,47 +240,65 @@ export function ManagerDealsClient() {
                           : "bg-secondary/30 border-transparent hover:bg-secondary/60 text-foreground"
                       }`}
                   >
-                    <p className="font-medium">All Reps</p>
+                    <p className="font-medium">All Members</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {stats?.totalDeals ?? 0} total deals
                     </p>
                   </button>
 
-                  {reps.map((rep) => (
-                    <button
-                      key={rep.id}
-                      onClick={() => updateFilter("rep", rep.id)}
-                      className={`w-full text-left p-3 rounded-lg text-sm transition-colors border
-                        ${
-                          filters.rep === rep.id
-                            ? "bg-primary/10 border-primary/30"
-                            : "bg-secondary/30 border-transparent hover:bg-secondary/60"
-                        }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Avatar className="w-6 h-6">
-                          <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                            {getInitials(rep.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span
-                          className={`font-medium truncate ${
+                  {reps.map((rep) => {
+                    const isManager = rep.id === managerId;
+                    return (
+                      <button
+                        key={rep.id}
+                        onClick={() => updateFilter("rep", rep.id)}
+                        className={`w-full text-left p-3 rounded-lg text-sm transition-colors border
+                          ${
                             filters.rep === rep.id
-                              ? "text-primary"
-                              : "text-foreground"
+                              ? "bg-primary/10 border-primary/30"
+                              : "bg-secondary/30 border-transparent hover:bg-secondary/60"
                           }`}
-                        >
-                          {rep.name}
-                        </span>
-                      </div>
-                      <div className="flex gap-3 text-xs text-muted-foreground ml-8">
-                        <span>{rep.active_deals} active</span>
-                        <span className="text-emerald-500">
-                          {rep.won_deals} won
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <Avatar className="w-6 h-6 flex-shrink-0">
+                            <AvatarFallback
+                              className={`text-xs font-semibold ${
+                                isManager
+                                  ? "bg-amber-500/20 text-amber-600"
+                                  : "bg-primary/20 text-primary"
+                              }`}
+                            >
+                              {getInitials(rep.name)}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          <span
+                            className={`font-medium truncate flex-1 min-w-0 ${
+                              filters.rep === rep.id
+                                ? "text-primary"
+                                : "text-foreground"
+                            }`}
+                          >
+                            {rep.name}
+                          </span>
+
+                          {/* "You" badge — only visible on manager's own row */}
+                          {isManager && (
+                            <span className="flex-shrink-0 text-xs font-medium text-amber-600 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                              You
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex gap-3 text-xs text-muted-foreground ml-8">
+                          <span>{rep.active_deals} active</span>
+                          <span className="text-emerald-500">
+                            {rep.won_deals} won
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -351,6 +384,7 @@ export function ManagerDealsClient() {
                 )}
               </div>
 
+              {/* Results count */}
               {!loading && (
                 <p className="text-xs text-muted-foreground">
                   {deals.length} deal{deals.length !== 1 ? "s" : ""} found
@@ -358,7 +392,10 @@ export function ManagerDealsClient() {
                   {filters.rep !== "all" &&
                     reps.find((r) => r.id === filters.rep) && (
                       <span className="ml-1">
-                        — {reps.find((r) => r.id === filters.rep)?.name}
+                        —{" "}
+                        {filters.rep === managerId
+                          ? "Your deals"
+                          : reps.find((r) => r.id === filters.rep)?.name}
                       </span>
                     )}
                 </p>
@@ -378,12 +415,12 @@ export function ManagerDealsClient() {
                 <h3 className="text-base font-semibold text-foreground mb-1">
                   {hasActiveFilters
                     ? "No deals match your filters"
-                    : "Your team has no deals yet"}
+                    : "No deals yet"}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   {hasActiveFilters
                     ? "Try adjusting your filters."
-                    : "Deals created by your team will appear here."}
+                    : "Deals created by you and your team will appear here."}
                 </p>
                 {hasActiveFilters && (
                   <Button variant="outline" onClick={resetFilters}>
@@ -393,111 +430,126 @@ export function ManagerDealsClient() {
               </div>
             ) : (
               <div className="space-y-3">
-                {deals.map((deal) => (
-                  <div
-                    key={deal.id}
-                    onClick={() =>
-                      router.push(`/deals/deal_details/${deal.id}`)
-                    }
-                    className="p-5 rounded-lg bg-card border border-border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      {/* Left */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-1 flex-wrap">
-                          <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                            {deal.company}
-                          </h3>
-                          {deal.title !== deal.company && (
-                            <span className="text-xs text-muted-foreground truncate">
-                              {deal.title}
-                            </span>
-                          )}
-                        </div>
-
-                        {deal.contact_person && (
-                          <p className="text-sm text-muted-foreground">
-                            {deal.contact_person}
-                            {deal.contact_email && (
-                              <span className="ml-2 text-xs">
-                                · {deal.contact_email}
+                {deals.map((deal) => {
+                  const isManagerDeal = deal.assigned_to === managerId;
+                  return (
+                    <div
+                      key={deal.id}
+                      onClick={() =>
+                        router.push(`/deals/deal_details/${deal.id}`)
+                      }
+                      className="p-5 rounded-lg bg-card border border-border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        {/* Left: company + contact + rep */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1 flex-wrap">
+                            <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                              {deal.company}
+                            </h3>
+                            {deal.title !== deal.company && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                {deal.title}
                               </span>
                             )}
-                          </p>
-                        )}
+                          </div>
 
-                        {/* Rep attribution — key difference from rep view */}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <Avatar className="w-5 h-5">
-                            <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                              {getInitials(deal.rep_name ?? "?")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs text-muted-foreground">
-                            {deal.rep_name}
-                          </span>
+                          {deal.contact_person && (
+                            <p className="text-sm text-muted-foreground">
+                              {deal.contact_person}
+                              {deal.contact_email && (
+                                <span className="ml-2 text-xs">
+                                  · {deal.contact_email}
+                                </span>
+                              )}
+                            </p>
+                          )}
+
+                          {/* Rep attribution row */}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <Avatar className="w-5 h-5">
+                              <AvatarFallback
+                                className={`text-xs ${
+                                  isManagerDeal
+                                    ? "bg-amber-500/20 text-amber-600"
+                                    : "bg-primary/20 text-primary"
+                                }`}
+                              >
+                                {getInitials(deal.rep_name ?? "?")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs text-muted-foreground">
+                              {deal.rep_name}
+                            </span>
+                            {/* "Your deal" tag — only on manager's own deals */}
+                            {isManagerDeal && (
+                              <span className="text-xs font-medium text-amber-600 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                Your deal
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: value + close date */}
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xl font-bold text-foreground">
+                            {formatCurrency(Number(deal.value))}
+                          </p>
+                          {deal.expected_close_date && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Close:{" "}
+                              {new Date(
+                                deal.expected_close_date,
+                              ).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </p>
+                          )}
                         </div>
                       </div>
 
-                      {/* Right: value */}
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-xl font-bold text-foreground">
-                          {formatCurrency(Number(deal.value))}
-                        </p>
-                        {deal.expected_close_date && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Close:{" "}
-                            {new Date(
-                              deal.expected_close_date,
-                            ).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
-                          </p>
-                        )}
+                      {/* Badges row */}
+                      <div className="flex items-center gap-2 mt-3 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={
+                            STAGE_STYLES[deal.stage] ??
+                            "bg-gray-500/10 text-gray-400"
+                          }
+                        >
+                          {capitalize(deal.stage)}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={
+                            STATUS_STYLES[deal.status] ??
+                            "bg-gray-500/10 text-gray-400"
+                          }
+                        >
+                          {capitalize(deal.status)}
+                        </Badge>
+                        <span
+                          className={`text-xs font-semibold ${getProbabilityColor(
+                            deal.probability,
+                          )}`}
+                        >
+                          {deal.probability}% probability
+                        </span>
+                        <span
+                          className={`text-xs ml-auto ${getDaysColor(
+                            deal.days_in_stage,
+                          )}`}
+                        >
+                          {Math.round(deal.days_in_stage)}d in stage
+                          {deal.days_in_stage >= 14 && " ⚠️"}
+                        </span>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors ml-1" />
                       </div>
                     </div>
-
-                    {/* Badges row */}
-                    <div className="flex items-center gap-2 mt-3 flex-wrap">
-                      <Badge
-                        variant="outline"
-                        className={
-                          STAGE_STYLES[deal.stage] ??
-                          "bg-gray-500/10 text-gray-400"
-                        }
-                      >
-                        {capitalize(deal.stage)}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={
-                          STATUS_STYLES[deal.status] ??
-                          "bg-gray-500/10 text-gray-400"
-                        }
-                      >
-                        {capitalize(deal.status)}
-                      </Badge>
-                      <span
-                        className={`text-xs font-semibold ${getProbabilityColor(
-                          deal.probability,
-                        )}`}
-                      >
-                        {deal.probability}% probability
-                      </span>
-                      <span
-                        className={`text-xs ml-auto ${getDaysColor(
-                          deal.days_in_stage,
-                        )}`}
-                      >
-                        {Math.round(deal.days_in_stage)}d in stage
-                        {deal.days_in_stage >= 14 && " ⚠️"}
-                      </span>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors ml-1" />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

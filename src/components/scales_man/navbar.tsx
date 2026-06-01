@@ -52,7 +52,7 @@ export function RepDashboardHeader() {
       <div className="mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
         {/* Left Side - Logo */}
         <Link
-          href="/manager/dashboard"
+          href="/scales_man/dashboard"
           className="flex items-center gap-2 sm:gap-3 flex-shrink-0"
         >
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-black flex items-center justify-center shadow-sm">
@@ -64,7 +64,7 @@ export function RepDashboardHeader() {
               SalesFlow
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Manager Panel
+              Scales-rep Panel
             </p>
           </div>
         </Link>

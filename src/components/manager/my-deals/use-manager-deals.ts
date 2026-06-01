@@ -8,6 +8,7 @@ import {
   ManagerDealsStats,
   RepSummary,
 } from "@/types/manager/my-deals";
+import { useSession } from "next-auth/react";
 
 const DEFAULT_FILTERS: ManagerDealsFilters = {
   stage: "all",
@@ -24,7 +25,9 @@ export function useManagerDeals() {
   const [filters, setFilters] = useState<ManagerDealsFilters>(DEFAULT_FILTERS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  // get userID from session
+  const { data: session } = useSession();
+  const managerId = session?.user?.id ?? "";
   const fetchDeals = useCallback(async (f: ManagerDealsFilters) => {
     try {
       setLoading(true);
@@ -84,6 +87,7 @@ export function useManagerDeals() {
     filters,
     loading,
     error,
+    managerId,
     updateFilter,
     resetFilters,
     hasActiveFilters,

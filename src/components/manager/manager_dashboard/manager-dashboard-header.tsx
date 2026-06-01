@@ -27,6 +27,11 @@ const navItems = [
     href: "/manager/my-deals",
     icon: Users,
   },
+  {
+    label: "Add Deal",
+    href: "/deals/add_deal",
+    icon: Users,
+  },
 ];
 
 export function ManagerDashboardHeader() {
