@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { NeedsAttentionDeal } from "./use-rep-dashboard";
+import { NeedsAttentionDeal } from "@/types/scales_man/dashboard";
 
 interface Props {
   data?: NeedsAttentionDeal[];

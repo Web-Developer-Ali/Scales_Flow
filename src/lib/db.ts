@@ -52,7 +52,7 @@ export async function query(text: string, params?: unknown[]) {
 
 // Transaction wrapper
 export async function withTransaction<T>(
-  callback: (client: PoolClient) => Promise<T>
+  callback: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
   try {

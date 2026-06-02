@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { RepDeal } from "./use-rep-dashboard";
+import { RepDeal } from "@/types/scales_man/dashboard";
 
 interface Props {
   data?: RepDeal[];

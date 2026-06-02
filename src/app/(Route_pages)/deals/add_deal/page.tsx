@@ -19,6 +19,7 @@ import {
   type FormData,
   type ValidationState,
 } from "@/components/add_deals/types";
+import { useSession } from "next-auth/react";
 
 export default function AddDealPage() {
   const router = useRouter();
@@ -28,7 +29,8 @@ export default function AddDealPage() {
     useState<ValidationState>(INITIAL_VALIDATION);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const session = useSession();
+  const role = session.data?.user?.role ?? "";
   // Get today's date in YYYY-MM-DD format for min date validation
   const getTodayDate = () => {
     const today = new Date();
@@ -156,10 +158,10 @@ export default function AddDealPage() {
       });
 
       // Redirect to deals list on success
-      // setTimeout(() => {
-      //   router.push("/rep/deals");
-      //   router.refresh();
-      // }, 1500);
+      setTimeout(() => {
+        router.push(`/${role}/my-deals`);
+        router.refresh();
+      }, 1500);
     } catch (err) {
       const errorMessage =
         axios.isAxiosError(err) && err.response?.data?.error
@@ -177,6 +179,10 @@ export default function AddDealPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (role !== "scales_man" && role !== "manager") {
+    return <div>unauthorized...</div>;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">

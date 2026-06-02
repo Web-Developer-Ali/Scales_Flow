@@ -2,6 +2,8 @@ export type SalesRep = {
   id: number;
   name: string;
   email: string;
+  deals: number;
+  conversionRate: number;
   totalRevenue: number;
   dealsClosedJan: number;
   dealsClosedFeb: number;

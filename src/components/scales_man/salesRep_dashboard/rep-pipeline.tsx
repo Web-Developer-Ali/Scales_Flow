@@ -20,7 +20,7 @@ import {
   Legend,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { StageBreakdown, MonthlyTrend } from "./use-rep-dashboard";
+import { MonthlyTrend, StageBreakdown } from "@/types/scales_man/dashboard";
 
 interface Props {
   stageBreakdown?: StageBreakdown[];

@@ -47,7 +47,7 @@ export const authOptions: NextAuthOptions = {
               )
             LIMIT 1
             `,
-            [email, MAX_FAILED_ATTEMPTS]
+            [email, MAX_FAILED_ATTEMPTS],
           );
 
           const user = rows[0];
@@ -73,7 +73,7 @@ export const authOptions: NextAuthOptions = {
                   last_failed_login_at = NOW()
               WHERE id = $1
               `,
-              [user.id]
+              [user.id],
             );
 
             throw new Error("Invalid credentials");
@@ -89,7 +89,7 @@ export const authOptions: NextAuthOptions = {
                 login_count = COALESCE(login_count, 0) + 1
             WHERE id = $1
             `,
-            [user.id]
+            [user.id],
           );
 
           return {

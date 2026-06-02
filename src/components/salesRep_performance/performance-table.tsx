@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SalesRep } from "@/types/salesRep_performance";
 import type React from "react";
 
 interface PerformanceTableProps {
