@@ -15,6 +15,8 @@ async function canAccessDeal(
        d.contact_phone, d.value, d.currency, d.stage::text, d.status::text,
        d.probability, d.expected_close_date, d.description,
        d.assigned_to, d.created_by, d.created_at, d.updated_at,
+         d.client_id,
+         cl.company_name AS client_name,
        GREATEST(
          EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400.0, 0
        ) AS days_in_stage,
@@ -24,6 +26,7 @@ async function canAccessDeal(
      FROM deals d
      LEFT JOIN users u ON d.assigned_to  = u.id
      LEFT JOIN users c ON d.created_by   = c.id
+     LEFT JOIN clients cl ON d.client_id   = cl.id
      WHERE d.id = $1`,
     [dealId],
   );

@@ -10,6 +10,8 @@ export interface DealDetail {
   contact_person: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  client_id: string | null;
+  client_name: string | null;
   value: number;
   currency: string;
   stage: string;

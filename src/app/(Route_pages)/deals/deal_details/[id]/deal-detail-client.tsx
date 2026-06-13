@@ -42,7 +42,9 @@ import {
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
+import { ClientSelector } from "@/components/clients/search_client/client-selector";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STAGES = [
@@ -109,13 +111,18 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
   const router = useRouter();
   const session = useSession();
   const role = session.data?.user?.role ?? "";
+  const userId = session.data?.user?.id ?? "";
 
   const { deal, loading, saving, error, updateDeal, deleteDeal } =
     useDealDetail(dealId);
 
-  // Edit mode state
+  // Edit mode
   const [isEditing, setIsEditing] = useState(false);
   const [editFields, setEditFields] = useState<Record<string, string>>({});
+
+  // Client link state during editing
+  const [editClientId, setEditClientId] = useState<string | null>(null);
+  const [editClientName, setEditClientName] = useState<string | null>(null);
 
   // Confirm dialog
   const [confirm, setConfirm] = useState<{
@@ -136,17 +143,13 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
 
   const openConfirm = (cfg: Omit<typeof confirm, "open">) =>
     setConfirm({ open: true, ...cfg });
-
   const closeConfirm = () => setConfirm((prev) => ({ ...prev, open: false }));
 
   // ── Permissions ─────────────────────────────────────────────────────────────
   const canEdit =
-    role === "admin" ||
-    role === "manager" ||
-    deal?.assigned_to === session.data?.user?.id;
+    role === "admin" || role === "manager" || deal?.assigned_to === userId;
 
-  const canDelete =
-    role === "admin" || deal?.assigned_to === session.data?.user?.id;
+  const canDelete = role === "admin" || deal?.assigned_to === userId;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const startEdit = () => {
@@ -162,12 +165,17 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
       expected_close_date: deal.expected_close_date?.substring(0, 10) ?? "",
       description: deal.description ?? "",
     });
+    // Pre-fill client from current deal data
+    setEditClientId(deal.client_id ?? null);
+    setEditClientName(deal.client_name ?? null);
     setIsEditing(true);
   };
 
   const cancelEdit = () => {
     setIsEditing(false);
     setEditFields({});
+    setEditClientId(null);
+    setEditClientName(null);
   };
 
   const saveEdit = async () => {
@@ -175,8 +183,12 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
       ...editFields,
       value: parseFloat(editFields.value),
       probability: parseInt(editFields.probability),
+      client_id: editClientId ?? null, // ← include client link
     } as never);
-    if (success) setIsEditing(false);
+    if (success) {
+      setIsEditing(false);
+      setEditFields({});
+    }
   };
 
   const handleStageChange = (newStage: string) => {
@@ -210,7 +222,6 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
 
   const handleStatusChange = (newStatus: string) => {
     if (!deal || newStatus === deal.status) return;
-
     const isTerminal = newStatus === "won" || newStatus === "lost";
     openConfirm({
       title: `Mark as ${capitalize(newStatus)}`,
@@ -561,10 +572,7 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
               <Textarea
                 value={editFields.description}
                 onChange={(e) =>
-                  setEditFields((p) => ({
-                    ...p,
-                    description: e.target.value,
-                  }))
+                  setEditFields((p) => ({ ...p, description: e.target.value }))
                 }
                 className="bg-background border-border resize-none text-sm"
                 rows={4}
@@ -652,8 +660,7 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
                     key={s.value}
                     onClick={() => canEdit && handleStageChange(s.value)}
                     disabled={!canEdit || saving || isActive}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm
-                      font-medium transition-all border
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all border
                       ${
                         isActive
                           ? "bg-primary/10 border-primary/30 text-primary"
@@ -717,6 +724,64 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
               </p>
             </div>
           )}
+
+          {/* ── Linked Client ──────────────────────────────────────────
+              Shows current linked client when not editing.
+              Shows ClientSelector when editing to change/remove the link.
+          ─────────────────────────────────────────────────────────────── */}
+          <div className="p-5 rounded-lg bg-card border border-border">
+            <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+              Linked Client
+            </h2>
+
+            {isEditing ? (
+              /* Edit mode: searchable client selector */
+              <>
+                <ClientSelector
+                  value={editClientId}
+                  displayName={editClientName}
+                  onChange={(id, name) => {
+                    setEditClientId(id);
+                    setEditClientName(name);
+                  }}
+                  placeholder="Search clients..."
+                  disabled={saving}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Search and select a client, or clear to unlink.
+                </p>
+              </>
+            ) : deal.client_id ? (
+              /* View mode: linked — show clickable client name */
+              <button
+                onClick={() =>
+                  router.push(`/scales_man/clients/${deal.client_id}`)
+                }
+                className="w-full flex items-center gap-2 p-3 rounded-lg bg-secondary/30 border border-border hover:border-primary/30 hover:bg-secondary/50 transition-all group text-left"
+              >
+                <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0 group-hover:text-primary transition-colors" />
+                <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors flex-1 truncate">
+                  {deal.client_name}
+                </span>
+                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+              </button>
+            ) : (
+              /* View mode: not linked */
+              <div className="text-center py-3">
+                <p className="text-xs text-muted-foreground">
+                  No client linked.
+                </p>
+                {canEdit && (
+                  <button
+                    onClick={startEdit}
+                    className="text-xs text-primary hover:underline mt-1"
+                  >
+                    Click Edit to link one
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Quick Info */}
           <div className="p-5 rounded-lg bg-secondary/30 border border-border space-y-3">

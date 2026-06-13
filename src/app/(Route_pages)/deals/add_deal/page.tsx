@@ -20,22 +20,25 @@ import {
   type ValidationState,
 } from "@/components/add_deals/types";
 import { useSession } from "next-auth/react";
+import { ClientSelector } from "@/components/clients/search_client/client-selector";
 
 export default function AddDealPage() {
   const router = useRouter();
+  const session = useSession();
+  const role = session.data?.user?.role ?? "";
 
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [validation, setValidation] =
     useState<ValidationState>(INITIAL_VALIDATION);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const session = useSession();
-  const role = session.data?.user?.role ?? "";
-  // Get today's date in YYYY-MM-DD format for min date validation
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
+
+  // Client link state — separate from formData so it doesn't
+  // conflict with the existing types file
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientName, setClientName] = useState<string | null>(null);
+
+  const getTodayDate = () => new Date().toISOString().split("T")[0];
 
   const validateField = (name: string, value: string): boolean => {
     switch (name) {
@@ -50,7 +53,7 @@ export default function AddDealPage() {
       case "value":
         return value.trim().length > 0 && parseFloat(value) > 0;
       case "expected_close_date": {
-        if (value.trim().length === 0) return true; // Optional field
+        if (value.trim().length === 0) return true;
         const selectedDate = new Date(value);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -67,7 +70,6 @@ export default function AddDealPage() {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Real-time validation for key fields
     if (
       [
         "title",
@@ -83,21 +85,17 @@ export default function AddDealPage() {
       }));
     }
 
-    // Clear error when user starts typing
     if (error) setError(null);
   };
 
   const handleSelect = (name: keyof FormData, value: string) => {
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
-      // Auto-fill probability when stage changes
       if (name === "stage") {
         next.probability = String(STAGE_PROBABILITY[value] ?? prev.probability);
       }
       return next;
     });
-
-    // Clear error when user selects
     if (error) setError(null);
   };
 
@@ -105,7 +103,6 @@ export default function AddDealPage() {
     e.preventDefault();
     setError(null);
 
-    // Comprehensive client-side validation
     const newValidation: ValidationState = {
       title: validateField("title", formData.title),
       company: validateField("company", formData.company),
@@ -147,17 +144,18 @@ export default function AddDealPage() {
         ...formData,
         value: parseFloat(formData.value),
         probability: parseInt(formData.probability),
+        client_id: clientId ?? null, // ← send linked client
       });
 
       if (!data.success) throw new Error(data.error);
 
-      // Show success toast
       toast.success(data.message || "Deal created successfully", {
-        description: `Deal "${formData.title}" has been added to your pipeline`,
+        description: `Deal "${formData.title}" has been added to your pipeline${
+          clientName ? ` and linked to ${clientName}` : ""
+        }`,
         duration: 3000,
       });
 
-      // Redirect to deals list on success
       setTimeout(() => {
         router.push(`/${role}/my-deals`);
         router.refresh();
@@ -170,7 +168,6 @@ export default function AddDealPage() {
 
       setError(errorMessage);
 
-      // Show error toast using Sonner
       toast.error("Failed to create deal", {
         description: errorMessage,
         duration: 4000,
@@ -186,7 +183,7 @@ export default function AddDealPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Header */}
+      {/* ── Header ────────────────────────────────────────────────────── */}
       <div className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <Button
@@ -209,7 +206,7 @@ export default function AddDealPage() {
         </div>
       </div>
 
-      {/* Form */}
+      {/* ── Form ──────────────────────────────────────────────────────── */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {error && (
           <Alert
@@ -224,6 +221,7 @@ export default function AddDealPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Existing sections — unchanged */}
           <CompanyContactSection
             formData={formData}
             validation={validation}
@@ -237,6 +235,37 @@ export default function AddDealPage() {
             onSelectChange={handleSelect}
             getTodayDate={getTodayDate}
           />
+
+          {/* ── Link to Client ─────────────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Link to Client
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Optionally associate this deal with an existing client to track
+                relationship history.
+              </p>
+            </div>
+
+            <ClientSelector
+              value={clientId}
+              displayName={clientName}
+              onChange={(id, name) => {
+                setClientId(id);
+                setClientName(name);
+              }}
+              placeholder="Search your clients..."
+              disabled={isSubmitting}
+            />
+
+            {clientId && (
+              <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                This deal will appear in {clientName}&apos;s deal history
+              </p>
+            )}
+          </div>
 
           {/* ── Actions ───────────────────────────────────────────────── */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

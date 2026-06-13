@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       expected_close_date,
       description,
       currency = "USD",
+      client_id = null,
     } = body;
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -94,6 +95,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // Validate client_id belongs to this user if provided
+    if (client_id) {
+      const { rows: clientRows } = await query(
+        `SELECT id FROM clients WHERE id = $1 AND (
+            assigned_to = $2 OR created_by = $2
+          )`,
+        [client_id, session.user.id],
+      );
+      if (!clientRows.length) {
+        return NextResponse.json(
+          { success: false, error: "Invalid client" },
+          { status: 400 },
+        );
+      }
+    }
+
     // ── Insert ────────────────────────────────────────────────────────────────
     const { rows } = await query(
       `INSERT INTO deals (
@@ -109,10 +126,15 @@ export async function POST(req: Request) {
         probability,
         expected_close_date,
         description,
+        client_id,
         assigned_to,
         created_by
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11,$12,$13)
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,
+        'active',
+        $9,$10,$11,$12,$13,$14
+      )
       RETURNING
         id, title, company, value, stage, status,
         probability, created_at`,
@@ -128,8 +150,9 @@ export async function POST(req: Request) {
         dealProbability,
         expected_close_date || null,
         description?.trim() || null,
-        session.user.id, // assigned to creator by default
-        session.user.id,
+        client_id,
+        session.user.id, // assigned_to
+        session.user.id, // created_by
       ],
     );
 

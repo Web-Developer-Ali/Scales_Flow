@@ -32,6 +32,11 @@ const navItems = [
     href: "/deals/add_deal",
     icon: Users,
   },
+  {
+    label: "Client",
+    href: "/scales_man/clients",
+    icon: Users,
+  },
 ];
 
 export function RepDashboardHeader() {
