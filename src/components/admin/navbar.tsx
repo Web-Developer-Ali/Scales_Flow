@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { BarChart3, Users, UserCog, LogOut, Menu, X } from "lucide-react";
+import {
+  BarChart3,
+  Users,
+  TrendingUp,
+  UserCog,
+  LogOut,
+  Menu,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +32,11 @@ const navItems = [
     label: "Assign Team",
     href: "/admin/assign-team",
     icon: UserCog,
+  },
+  {
+    label: "Performance Report",
+    href: "/admin/reports",
+    icon: TrendingUp,
   },
 ];
 
