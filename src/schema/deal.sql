@@ -30,16 +30,26 @@ CREATE TABLE IF NOT EXISTS deals (
 
     expected_close_date DATE,
 
-    assigned_to         UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_by          UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    -- Client link (Phase 3D)
+    client_id           UUID          REFERENCES clients(id) ON DELETE SET NULL,
+
+    assigned_to         UUID          REFERENCES users(id) ON DELETE SET NULL,
+    created_by          UUID          NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
 
-    generated_month     DATE          NOT NULL DEFAULT DATE_TRUNC('month', NOW())::DATE
+    -- Set by trigger on INSERT from created_at
+    generated_month     DATE          NOT NULL DEFAULT DATE_TRUNC('month', NOW())::DATE,
+
+    CONSTRAINT deals_value_positive CHECK (value > 0),
+    CONSTRAINT deals_title_not_empty   CHECK (title   <> ''),
+    CONSTRAINT deals_company_not_empty CHECK (company <> '')
 );
 
--- ── Trigger: keep updated_at fresh ───────────────────────────────────────────
+-- ── Triggers ─────────────────────────────────────────────────────────────────
+
+-- Trigger: keep updated_at fresh
 CREATE OR REPLACE FUNCTION update_deal_timestamp()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -53,7 +63,10 @@ CREATE TRIGGER trg_update_deal_timestamp
 BEFORE UPDATE ON deals
 FOR EACH ROW EXECUTE FUNCTION update_deal_timestamp();
 
--- ── Trigger: set generated_month from created_at on INSERT ───────────────────
+-- Trigger: set generated_month from created_at on INSERT
+-- generated_month is always derived from created_at
+-- We use a trigger (not GENERATED ALWAYS AS) because
+-- date_trunc() is not marked IMMUTABLE in PostgreSQL
 CREATE OR REPLACE FUNCTION set_generated_month()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -69,26 +82,37 @@ FOR EACH ROW EXECUTE FUNCTION set_generated_month();
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 
--- Queries 1 & 2: SUM(value) WHERE generated_month + status
+-- Dashboard queries 1 & 2: SUM(value) WHERE generated_month + status
+-- INCLUDE avoids heap fetch for covering queries
 CREATE INDEX IF NOT EXISTS idx_deals_month_status_value
     ON deals (generated_month, status)
     INCLUDE (value);
 
--- Query 4: AVG close time for won deals only
+-- Dashboard query 4: AVG close time for won deals (partial index)
 CREATE INDEX IF NOT EXISTS idx_deals_won_close_time
     ON deals (generated_month, created_at, updated_at)
     WHERE status = 'won';
 
--- Query 5: GROUP BY stage WHERE generated_month
+-- Dashboard query 5: GROUP BY stage WHERE generated_month
 CREATE INDEX IF NOT EXISTS idx_deals_month_stage
     ON deals (generated_month, stage);
 
--- Query 6: team performance join
+-- Dashboard query 6: team performance — join on assigned_to, filter won
 CREATE INDEX IF NOT EXISTS idx_deals_month_assigned_won
     ON deals (generated_month, assigned_to)
     INCLUDE (value)
     WHERE status = 'won';
 
--- Query 7: recent deals ordered by created_at DESC
+-- Dashboard query 7: recent deals ordered by created_at DESC
 CREATE INDEX IF NOT EXISTS idx_deals_month_created_desc
     ON deals (generated_month, created_at DESC);
+
+-- Client detail page: all deals for a client
+CREATE INDEX IF NOT EXISTS idx_deals_client_id
+    ON deals (client_id)
+    WHERE client_id IS NOT NULL;
+
+-- Reports API: all-time rep performance aggregation
+CREATE INDEX IF NOT EXISTS idx_deals_assigned_status
+    ON deals (assigned_to, status)
+    INCLUDE (value);

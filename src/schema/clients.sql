@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS clients (
   created_by            UUID          NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
   created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT clients_company_not_empty CHECK (company_name <> '')
 );
 
 -- ── TRIGGER: updated_at ───────────────────────────────────────────────────────
@@ -51,6 +53,10 @@ CREATE INDEX IF NOT EXISTS idx_clients_status
 
 CREATE INDEX IF NOT EXISTS idx_clients_created_by
   ON clients (created_by);
+
+-- Fast search by company name (case-insensitive via ILIKE)
+CREATE INDEX IF NOT EXISTS idx_clients_company_name
+  ON clients (company_name);
 
 -- ── 3D: Link deals to clients ─────────────────────────────────────────────────
 ALTER TABLE deals

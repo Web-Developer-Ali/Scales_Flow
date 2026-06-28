@@ -26,7 +26,7 @@ CREATE TABLE users (
     -- ROLES
     role VARCHAR(20) NOT NULL DEFAULT 'scales_man',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    manager_id UUID REFERENCES users(id) ON DELETE SET NULL;
+    manager_id UUID REFERENCES users(id) ON DELETE SET NULL,
 
     -- EMAIL OTP
     email_otp VARCHAR(6),
@@ -67,7 +67,11 @@ CREATE TABLE users (
     ),
 
     -- Prevent empty email
-    CONSTRAINT users_email_not_empty CHECK (email <> '')
+    CONSTRAINT users_email_not_empty CHECK (email <> ''),
+
+    -- Prevent a user from being their own manager
+    CONSTRAINT users_no_self_manager CHECK (manager_id <> id),
+    CONSTRAINT users_no_self_creator CHECK (created_by <> id)
 );
 
 
@@ -79,8 +83,18 @@ CREATE INDEX idx_users_role ON users (role);
 CREATE INDEX idx_users_created_by ON users (created_by);
 CREATE INDEX idx_users_created_at ON users (created_at);
 CREATE INDEX IF NOT EXISTS idx_users_manager_id
-ON users (manager_id)
-WHERE manager_id IS NOT NULL;
+    ON users (manager_id)
+    WHERE manager_id IS NOT NULL;
+
+-- Only one admin allowed — enforced at app layer AND here as partial unique index
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_single_admin
+    ON users (role)
+    WHERE role = 'admin';
+
+-- Fast lookup for active + verified users (common auth query)
+CREATE INDEX IF NOT EXISTS idx_users_active_verified
+    ON users (is_active, is_verified)
+    WHERE is_active = TRUE AND is_verified = TRUE;
 
 -- ================================
 -- TRIGGER: AUTO UPDATE TIMESTAMP
@@ -108,6 +122,7 @@ EXECUTE FUNCTION update_user_timestamp();
 UPDATE users u
 SET manager_id = u.created_by
 WHERE u.role = 'scales_man'
+  AND u.manager_id IS NULL
   AND EXISTS (
     SELECT 1 FROM users creator
     WHERE creator.id = u.created_by
@@ -228,12 +243,12 @@ BEGIN
             entity_id
         )
         VALUES (
-            v_user_id,                           -- The user who was created
-            p_created_by,                        -- Who performed the action
-            'user_created',                            -- Using existing 'insert' activity type
+            v_user_id,
+            p_created_by,
+            'user_created',
             CONCAT(p_role, ' created: ', p_name, ' (', p_email, ')'),
-            'user',                              -- Entity type
-            v_user_id                            -- The new user's ID
+            'user',
+            v_user_id
         );
     END IF;
 
@@ -250,23 +265,30 @@ $$ LANGUAGE plpgsql;
 -- VIEW
 -- ================================
 
-CREATE VIEW user_hierarchy AS
+CREATE OR REPLACE VIEW user_hierarchy AS
 SELECT
     u.id,
     u.email,
     u.name,
     u.role,
     u.company_name,
+    u.is_active,
+    u.is_verified,
     u.created_by,
+    u.manager_id,
 
     c.email AS created_by_email,
     c.name AS created_by_name,
     c.role AS created_by_role,
 
+    m.name AS manager_name,
+
     u.last_login_at,
+    u.login_count,
     u.created_at
 FROM users u
 LEFT JOIN users c ON u.created_by = c.id
+LEFT JOIN users m ON u.manager_id = m.id
 ORDER BY
     CASE u.role
         WHEN 'admin' THEN 1
