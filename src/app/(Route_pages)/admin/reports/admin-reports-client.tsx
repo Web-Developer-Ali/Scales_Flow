@@ -410,7 +410,7 @@ export function AdminReportsClient() {
                       color: "var(--foreground)",
                       fontSize: 12,
                     }}
-                    formatter={(value: number) => [formatAmount(value)]}
+                    formatter={(value) => [formatAmount(Number(value ?? 0))]}
                   />
                   <Legend fontSize={12} />
                   <Bar
