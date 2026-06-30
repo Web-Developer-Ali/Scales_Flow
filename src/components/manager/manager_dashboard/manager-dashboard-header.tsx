@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +32,11 @@ const navItems = [
     label: "Add Deal",
     href: "/deals/add_deal",
     icon: Users,
+  },
+  {
+    label: "Performance Report",
+    href: "/manager/reports",
+    icon: TrendingUp,
   },
 ];
 
