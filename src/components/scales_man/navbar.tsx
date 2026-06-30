@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -36,6 +37,11 @@ const navItems = [
     label: "Client",
     href: "/scales_man/clients",
     icon: Users,
+  },
+  {
+    label: "Performance Report",
+    href: "/scales_man/performance",
+    icon: TrendingUp,
   },
 ];
 
