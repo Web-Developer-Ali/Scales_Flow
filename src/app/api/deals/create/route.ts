@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { notifyDealAssigned } from "@/lib/notifications";
 
 const VALID_STAGES = [
   "prospect",
@@ -169,6 +170,15 @@ export async function POST(req: Request) {
         deal.id,
       ],
     );
+
+    // ── NOTIFICATION ──────────────────────────────────────────────────────────
+    // Notify rep that a deal has been assigned to them
+    await notifyDealAssigned({
+      repId: session.user.id,
+      dealTitle: deal.title,
+      dealId: deal.id,
+      companyName: deal.company,
+    });
 
     return NextResponse.json({
       success: true,

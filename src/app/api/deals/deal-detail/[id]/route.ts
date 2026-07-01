@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import {
+  notifyDealStageChanged,
+  notifyDealWon,
+  notifyDealLost,
+} from "@/lib/notifications";
 
 // ── Permission check helper ───────────────────────────────────────────────────
 async function canAccessDeal(
@@ -245,6 +250,66 @@ export async function PATCH(
         dealId,
       ],
     );
+
+    // ── NOTIFICATIONS ──────────────────────────────────────────────────────────
+    // Check for stage and status changes
+    const stageChanged = body.stage && body.stage !== deal.stage;
+    const statusChanged = body.status && body.status !== deal.status;
+
+    // Notify manager when rep changes stage
+    if (
+      stageChanged &&
+      deal.assigned_to &&
+      deal.assigned_to !== session.user.id
+    ) {
+      // Find the manager of the assigned rep
+      const { rows: managerRows } = await query(
+        `SELECT manager_id FROM users WHERE id = $1`,
+        [deal.assigned_to],
+      );
+      const managerId = managerRows[0]?.manager_id;
+      if (managerId) {
+        await notifyDealStageChanged({
+          managerId,
+          repName: session.user?.name ?? "Your rep",
+          dealTitle: deal.title as string,
+          dealId: dealId,
+          fromStage: deal.stage as string,
+          toStage: body.stage,
+        });
+      }
+    }
+
+    // Notify manager when deal is won or lost
+    if (statusChanged) {
+      const { rows: managerRows } = await query(
+        `SELECT u.manager_id, u.name
+         FROM users u WHERE u.id = $1`,
+        [deal.assigned_to ?? session.user.id],
+      );
+      const managerId = managerRows[0]?.manager_id;
+      const repName = managerRows[0]?.name ?? "Your rep";
+
+      if (managerId && body.status === "won") {
+        await notifyDealWon({
+          managerId,
+          repName,
+          dealTitle: deal.title as string,
+          dealId,
+          dealValue: Number(deal.value),
+          companyName: deal.company as string,
+        });
+      }
+      if (managerId && body.status === "lost") {
+        await notifyDealLost({
+          managerId,
+          repName,
+          dealTitle: deal.title as string,
+          dealId,
+          companyName: deal.company as string,
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,

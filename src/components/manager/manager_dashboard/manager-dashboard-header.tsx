@@ -16,6 +16,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/shared/notification-bell";
 
 const navItems = [
   {
@@ -103,6 +104,9 @@ export function ManagerDashboardHeader() {
 
         {/* Right Side */}
         <div className="flex items-center gap-2 sm:gap-4">
+          {/* Notification Bell */}
+          <NotificationBell role="manager" />
+
           <Button
             variant="outline"
             onClick={handleLogout}
