@@ -46,13 +46,13 @@ export async function createNotification(p: CreateNotificationParams) {
 // Call these from your deal and user API routes
 
 export async function notifyDealAssigned(params: {
-  repId: string;
+  managerId: string;
   dealTitle: string;
   dealId: string;
   companyName: string;
 }) {
   await createNotification({
-    userId: params.repId,
+    userId: params.managerId,
     type: "deal_assigned",
     title: "New Deal Assigned",
     message: `You've been assigned a new deal: ${params.dealTitle} — ${params.companyName}`,

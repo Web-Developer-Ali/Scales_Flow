@@ -280,8 +280,8 @@ export async function PATCH(
       }
     }
 
-    // Notify manager when deal is won or lost
-    if (statusChanged) {
+    // Notify manager when deal is won or lost or deal stage is changed
+    if (statusChanged || stageChanged) {
       const { rows: managerRows } = await query(
         `SELECT u.manager_id, u.name
          FROM users u WHERE u.id = $1`,
@@ -290,6 +290,16 @@ export async function PATCH(
       const managerId = managerRows[0]?.manager_id;
       const repName = managerRows[0]?.name ?? "Your rep";
 
+      if (managerId && stageChanged) {
+        await notifyDealStageChanged({
+          managerId,
+          repName,
+          dealTitle: deal.title as string,
+          dealId,
+          fromStage: deal.stage as string,
+          toStage: body.stage,
+        });
+      }
       if (managerId && body.status === "won") {
         await notifyDealWon({
           managerId,

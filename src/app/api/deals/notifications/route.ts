@@ -13,7 +13,6 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const unreadOnly = searchParams.get("unread") === "true";
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
-
   try {
     const WHERE = unreadOnly
       ? `WHERE user_id = $1 AND is_read = FALSE`
@@ -37,7 +36,6 @@ export async function GET(req: Request) {
        WHERE user_id = $1 AND is_read = FALSE`,
       [session.user.id],
     );
-
     return NextResponse.json({
       success: true,
       notifications: rows,

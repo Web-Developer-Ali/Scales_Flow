@@ -172,13 +172,31 @@ export async function POST(req: Request) {
     );
 
     // ── NOTIFICATION ──────────────────────────────────────────────────────────
-    // Notify rep that a deal has been assigned to them
-    await notifyDealAssigned({
-      repId: session.user.id,
-      dealTitle: deal.title,
-      dealId: deal.id,
-      companyName: deal.company,
-    });
+    // Notify manager that a deal has been created by their rep
+
+    // First, get the user's details including their manager
+    const { rows: userRows } = await query(
+      `SELECT id, name, manager_id, role FROM users WHERE id = $1`,
+      [session.user.id],
+    );
+
+    const currentUser = userRows[0];
+    const managerId = currentUser?.manager_id;
+
+    // Only send notification if the user has a manager assigned
+    if (managerId) {
+      await notifyDealAssigned({
+        managerId: managerId,
+        dealTitle: deal.title,
+        dealId: deal.id,
+        companyName: deal.company,
+      });
+    } else {
+      // Log that notification was skipped (user doesn't have a manager)
+      console.log(
+        `Notification skipped: User ${session.user.id} (${currentUser?.name || "Unknown"}) doesn't have a manager assigned`,
+      );
+    }
 
     return NextResponse.json({
       success: true,
