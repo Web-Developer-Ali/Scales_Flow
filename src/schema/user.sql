@@ -142,7 +142,9 @@ CREATE OR REPLACE FUNCTION create_user_with_role(
     p_company_name VARCHAR DEFAULT NULL,
     p_created_by UUID DEFAULT NULL,
     p_auth_provider VARCHAR DEFAULT 'credentials',
-    p_provider_id TEXT DEFAULT NULL
+    p_provider_id TEXT DEFAULT NULL,
+    p_ip_address INET DEFAULT NULL,
+    p_user_agent TEXT DEFAULT NULL
 )
 RETURNS TABLE(user_id UUID, otp VARCHAR) AS $$
 DECLARE
@@ -232,7 +234,7 @@ BEGIN
     )
     RETURNING id INTO v_user_id;
 
-    -- ADD ACTIVITY LOGGING (Only for manager and scales_man)
+    -- ACTIVITY LOGGING (Only for manager and scales_man) — now with ip/user_agent
     IF p_role IN ('manager', 'scales_man') THEN
         INSERT INTO user_activities (
             user_id,
@@ -240,7 +242,9 @@ BEGIN
             activity_type,
             description,
             entity_type,
-            entity_id
+            entity_id,
+            ip_address,
+            user_agent
         )
         VALUES (
             v_user_id,
@@ -248,7 +252,9 @@ BEGIN
             'user_created',
             CONCAT(p_role, ' created: ', p_name, ' (', p_email, ')'),
             'user',
-            v_user_id
+            v_user_id,
+            p_ip_address,
+            p_user_agent
         );
     END IF;
 
@@ -259,6 +265,7 @@ EXCEPTION
         RAISE EXCEPTION 'Email already exists';
 END;
 $$ LANGUAGE plpgsql;
+
 
 
 -- ================================

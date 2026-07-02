@@ -6,6 +6,7 @@ import {
   notifyDealStageChanged,
   notifyDealWon,
   notifyDealLost,
+  notifyDealDeleted,
 } from "@/lib/notifications";
 
 // ── Permission check helper ───────────────────────────────────────────────────
@@ -375,6 +376,15 @@ export async function DELETE(
       );
     }
 
+    const { rows: managerRows } = await query(
+      `SELECT manager_id
+       FROM users
+       WHERE id = $1`,
+      [deal.assigned_to],
+    );
+
+    const managerId = managerRows[0]?.manager_id;
+
     await query(`DELETE FROM deals WHERE id = $1`, [dealId]);
 
     await query(
@@ -388,6 +398,16 @@ export async function DELETE(
         dealId,
       ],
     );
+
+    if (managerId && managerId !== session.user.id) {
+      await notifyDealDeleted({
+        managerId,
+        repName: session.user.name ?? "A team member",
+        dealTitle: deal.title as string,
+        companyName: deal.company as string,
+        dealId,
+      });
+    }
 
     return NextResponse.json({
       success: true,

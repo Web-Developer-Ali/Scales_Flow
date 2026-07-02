@@ -5,6 +5,7 @@ type NotificationType =
   | "deal_stage_changed"
   | "deal_won"
   | "deal_lost"
+  | "deal_deleted"
   | "deal_stalled"
   | "monthly_target_reminder"
   | "team_member_created"
@@ -115,6 +116,23 @@ export async function notifyDealLost(params: {
     type: "deal_lost",
     title: "Deal Lost",
     message: `${params.repName} marked "${params.dealTitle}" — ${params.companyName} as lost`,
+    entityType: "deal",
+    entityId: params.dealId,
+  });
+}
+
+export async function notifyDealDeleted(params: {
+  managerId: string;
+  repName: string;
+  dealTitle: string;
+  companyName: string;
+  dealId: string;
+}) {
+  await createNotification({
+    userId: params.managerId,
+    type: "deal_deleted",
+    title: "Deal Deleted",
+    message: `${params.repName} deleted "${params.dealTitle}" — ${params.companyName}`,
     entityType: "deal",
     entityId: params.dealId,
   });

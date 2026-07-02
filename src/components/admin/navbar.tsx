@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   X,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -37,6 +38,11 @@ const navItems = [
     label: "Performance Report",
     href: "/admin/reports",
     icon: TrendingUp,
+  },
+  {
+    label: "Activity",
+    href: "/admin/activity",
+    icon: Activity,
   },
 ];
 

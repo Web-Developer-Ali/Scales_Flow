@@ -303,7 +303,7 @@ export function MyDealsClient() {
                 Clear Filters
               </Button>
             ) : (
-              <Button onClick={() => router.push("/scales_man/add_deal")}>
+              <Button onClick={() => router.push("/deals/add_deal")}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Deal
               </Button>

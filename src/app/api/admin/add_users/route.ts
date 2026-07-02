@@ -5,6 +5,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { sendRegistrationOtp } from "@/lib/email/otp-service";
 
+function getClientIp(req: Request): string | null {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    // x-forwarded-for can be a comma-separated list; the first is the client
+    return forwardedFor.split(",")[0]?.trim() || null;
+  }
+  return req.headers.get("x-real-ip") || null;
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -32,15 +41,22 @@ export async function POST(req: Request) {
 
     const password_hash = await bcrypt.hash(password, 10);
 
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers.get("user-agent") || null;
+
     const { rows } = await query(
-      `SELECT * FROM create_user_with_role($1, $2, $3, $4, $5, $6)`,
+      `SELECT * FROM create_user_with_role($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         email.toLowerCase().trim(),
         password_hash,
         name.trim(),
         role,
-        null,
-        session.user.id,
+        null, // p_company_name
+        session.user.id, // p_created_by
+        "credentials", // p_auth_provider
+        null, // p_provider_id
+        ipAddress, // p_ip_address
+        userAgent, // p_user_agent
       ],
     );
 

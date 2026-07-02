@@ -3,6 +3,52 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 
+async function logActivity(params: {
+  userId: string;
+  performedBy: string;
+  activityType: string;
+  description?: string;
+  entityType?: string;
+  entityId?: string;
+  req: Request;
+}) {
+  try {
+    const {
+      userId,
+      performedBy,
+      activityType,
+      description,
+      entityType,
+      entityId,
+      req,
+    } = params;
+
+    const ipAddress =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      null;
+    const userAgent = req.headers.get("user-agent") || null;
+
+    await query(
+      `INSERT INTO user_activities
+        (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        userId,
+        performedBy,
+        activityType,
+        description ?? null,
+        entityType ?? null,
+        entityId ?? null,
+        ipAddress,
+        userAgent,
+      ],
+    );
+  } catch (err) {
+    console.error("Activity Log Error:", err);
+  }
+}
+
 export async function PATCH(
   req: Request,
   context: { params: Promise<{ id: string }> },
@@ -42,7 +88,7 @@ export async function PATCH(
 
   try {
     const { rows } = await query(
-      `SELECT id, created_by, role FROM users WHERE id = $1`,
+      `SELECT id, created_by, role, email FROM users WHERE id = $1`,
       [userId],
     );
 
@@ -80,6 +126,20 @@ export async function PATCH(
        RETURNING id, email, is_active`,
       [action === "unblock", userId],
     );
+
+    // Log activity (does not block/fail the response)
+    await logActivity({
+      userId,
+      performedBy: currentUserId,
+      activityType: action === "block" ? "user_blocked" : "user_unblocked",
+      description:
+        action === "block"
+          ? `User ${target.email} was blocked`
+          : `User ${target.email} was unblocked`,
+      entityType: "user",
+      entityId: userId,
+      req,
+    });
 
     return NextResponse.json({
       success: true,

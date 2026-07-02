@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   TrendingUp,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -38,6 +39,11 @@ const navItems = [
     label: "Performance Report",
     href: "/manager/reports",
     icon: TrendingUp,
+  },
+  {
+    label: "Team Activity",
+    href: "/manager/activity",
+    icon: Activity,
   },
 ];
 

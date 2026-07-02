@@ -12,7 +12,8 @@ DO $$ BEGIN
     'deal_stalled',
     'monthly_target_reminder',
     'team_member_created',
-    'deal_commented'
+    'deal_commented',
+    'deal_deleted'
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

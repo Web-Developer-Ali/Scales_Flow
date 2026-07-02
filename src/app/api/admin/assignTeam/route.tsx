@@ -3,6 +3,53 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 
+async function logActivity(params: {
+  userId: string;
+  performedBy: string;
+  activityType: string;
+  description?: string;
+  entityType?: string;
+  entityId?: string;
+  req: Request;
+}) {
+  try {
+    const {
+      userId,
+      performedBy,
+      activityType,
+      description,
+      entityType,
+      entityId,
+      req,
+    } = params;
+
+    const ipAddress =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      null;
+    const userAgent = req.headers.get("user-agent") || null;
+
+    await query(
+      `INSERT INTO user_activities
+        (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        userId,
+        performedBy,
+        activityType,
+        description ?? null,
+        entityType ?? null,
+        entityId ?? null,
+        ipAddress,
+        userAgent,
+      ],
+    );
+  } catch (err) {
+    // Never let logging failures break the main request
+    console.error("Activity Log Error:", err);
+  }
+}
+
 export async function GET() {
   // Returns all managers + their currently assigned reps
   const session = await getServerSession(authOptions);
@@ -87,9 +134,10 @@ export async function PATCH(req: Request) {
     }
 
     // If managerId provided, validate manager exists
+    let managerName: string | null = null;
     if (managerId) {
       const { rows: mgrRows } = await query(
-        `SELECT id, role FROM users WHERE id = $1`,
+        `SELECT id, role, name FROM users WHERE id = $1`,
         [managerId],
       );
 
@@ -99,6 +147,7 @@ export async function PATCH(req: Request) {
           { status: 404 },
         );
       }
+      managerName = mgrRows[0].name;
     }
 
     // Update manager_id
@@ -109,6 +158,19 @@ export async function PATCH(req: Request) {
        RETURNING id, name, email, manager_id`,
       [managerId ?? null, repId],
     );
+
+    // Log activity (does not block/fail the response)
+    await logActivity({
+      userId: repId,
+      performedBy: session.user.id,
+      activityType: "team_assigned",
+      description: managerId
+        ? `Assigned to manager ${managerName ?? managerId}`
+        : "Unassigned from manager",
+      entityType: "user",
+      entityId: repId,
+      req,
+    });
 
     return NextResponse.json({
       success: true,
