@@ -233,7 +233,7 @@ export async function POST(req: Request) {
     await query(
       `INSERT INTO user_activities
          (user_id, performed_by, activity_type, description, entity_type, entity_id)
-       VALUES ($1, $1, 'deal_created', $2, 'client', $3)`,
+       VALUES ($1, $1, 'client_created', $2, 'client', $3)`,
       [session.user.id, `Created client: ${rows[0].company_name}`, rows[0].id],
     );
 

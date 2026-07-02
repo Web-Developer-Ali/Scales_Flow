@@ -3,6 +3,57 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 
+function getClientIp(req: Request): string | null {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || null;
+  }
+  return req.headers.get("x-real-ip") || null;
+}
+
+async function logActivity(params: {
+  userId: string;
+  performedBy: string;
+  activityType: string;
+  description?: string;
+  entityType?: string;
+  entityId?: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+}) {
+  try {
+    const {
+      userId,
+      performedBy,
+      activityType,
+      description,
+      entityType,
+      entityId,
+      ipAddress,
+      userAgent,
+    } = params;
+
+    await query(
+      `INSERT INTO user_activities
+         (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        userId,
+        performedBy,
+        activityType,
+        description ?? null,
+        entityType ?? null,
+        entityId ?? null,
+        ipAddress,
+        userAgent,
+      ],
+    );
+  } catch (err) {
+    // Never let logging failures break the main request
+    console.error("Activity Log Error:", err);
+  }
+}
+
 // ── Permission check ──────────────────────────────────────────────────────────
 async function canAccessClient(
   clientId: string,
@@ -153,13 +204,13 @@ export async function PATCH(
   const { id: clientId } = await context.params;
 
   try {
-    const { allowed } = await canAccessClient(
+    const { allowed, client } = await canAccessClient(
       clientId,
       session.user.id,
       session.user.role,
     );
 
-    if (!allowed) {
+    if (!allowed || !client) {
       return NextResponse.json(
         { success: false, error: "Client not found" },
         { status: 404 },
@@ -222,6 +273,22 @@ export async function PATCH(
       values,
     );
 
+    // ── Log to user_activities ─────────────────────────────────────────────
+    const changedFields = Object.keys(body)
+      .filter((k) => ALLOWED_FIELDS.includes(k as never))
+      .join(", ");
+
+    await logActivity({
+      userId: (client.assigned_to as string) ?? session.user.id,
+      performedBy: session.user.id,
+      activityType: "client_updated",
+      description: `Updated client "${client.company_name}" — fields: ${changedFields}`,
+      entityType: "client",
+      entityId: clientId,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get("user-agent") || null,
+    });
+
     return NextResponse.json({
       success: true,
       message: "Client updated",
@@ -238,7 +305,7 @@ export async function PATCH(
 
 // ── DELETE: delete client ─────────────────────────────────────────────────────
 export async function DELETE(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -282,6 +349,18 @@ export async function DELETE(
     ]);
 
     await query(`DELETE FROM clients WHERE id = $1`, [clientId]);
+
+    // ── Log to user_activities ─────────────────────────────────────────────
+    await logActivity({
+      userId: (client.assigned_to as string) ?? session.user.id,
+      performedBy: session.user.id,
+      activityType: "client_deleted",
+      description: `Deleted client: ${client.company_name}`,
+      entityType: "client",
+      entityId: clientId,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get("user-agent") || null,
+    });
 
     return NextResponse.json({
       success: true,

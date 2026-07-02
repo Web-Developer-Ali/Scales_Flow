@@ -1,19 +1,10 @@
 -- ─── ENUMS ────────────────────────────────────────────────────────────────────
-
-DO $$ BEGIN
-  CREATE TYPE activity_type AS ENUM (
-    'call', 'email', 'meeting', 'follow_up',
-    'demo', 'proposal', 'negotiation', 'note', 'other'
-  );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
 DO $$ BEGIN
   CREATE TYPE user_activity_type AS ENUM (
     'login', 'logout', 'password_change', 'profile_update',
     'deal_created', 'deal_updated', 'deal_deleted',
     'user_created', 'user_blocked', 'user_unblocked', 'user_deleted',
-    'team_assigned'
+    'team_assigned' , 'email_verified' , 'client_created' , 'client_updated' , 'client_deleted' 
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

@@ -9,6 +9,56 @@ import {
   notifyDealDeleted,
 } from "@/lib/notifications";
 
+function getClientIp(req: Request): string | null {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || null;
+  }
+  return req.headers.get("x-real-ip") || null;
+}
+
+async function logActivity(params: {
+  userId: string;
+  performedBy: string;
+  activityType: string;
+  description?: string;
+  entityType?: string;
+  entityId?: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+}) {
+  try {
+    const {
+      userId,
+      performedBy,
+      activityType,
+      description,
+      entityType,
+      entityId,
+      ipAddress,
+      userAgent,
+    } = params;
+
+    await query(
+      `INSERT INTO user_activities
+         (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        userId,
+        performedBy,
+        activityType,
+        description ?? null,
+        entityType ?? null,
+        entityId ?? null,
+        ipAddress,
+        userAgent,
+      ],
+    );
+  } catch (err) {
+    console.error("Activity Log Error:", err);
+  }
+}
+
 // ── Permission check helper ───────────────────────────────────────────────────
 async function canAccessDeal(
   dealId: string,
@@ -240,17 +290,19 @@ export async function PATCH(
       .filter((k) => allowed_fields.includes(k as never))
       .join(", ");
 
-    await query(
-      `INSERT INTO user_activities
-         (user_id, performed_by, activity_type, description, entity_type, entity_id)
-       VALUES ($1, $2, 'deal_updated', $3, 'deal', $4)`,
-      [
-        deal.assigned_to ?? session.user.id,
-        session.user.id,
-        `Updated deal fields: ${changedFields}`,
-        dealId,
-      ],
-    );
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers.get("user-agent") || null;
+
+    await logActivity({
+      userId: (deal.assigned_to as string) ?? session.user.id,
+      performedBy: session.user.id,
+      activityType: "deal_updated",
+      description: `Updated deal fields: ${changedFields}`,
+      entityType: "deal",
+      entityId: dealId,
+      ipAddress,
+      userAgent,
+    });
 
     // ── NOTIFICATIONS ──────────────────────────────────────────────────────────
     // Check for stage and status changes
@@ -338,7 +390,7 @@ export async function PATCH(
 
 // ── DELETE: delete deal ───────────────────────────────────────────────────────
 export async function DELETE(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -387,17 +439,19 @@ export async function DELETE(
 
     await query(`DELETE FROM deals WHERE id = $1`, [dealId]);
 
-    await query(
-      `INSERT INTO user_activities
-         (user_id, performed_by, activity_type, description, entity_type, entity_id)
-       VALUES ($1, $2, 'deal_deleted', $3, 'deal', $4)`,
-      [
-        deal.assigned_to ?? session.user.id,
-        session.user.id,
-        `Deleted deal: ${deal.title} — ${deal.company}`,
-        dealId,
-      ],
-    );
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers.get("user-agent") || null;
+
+    await logActivity({
+      userId: (deal.assigned_to as string) ?? session.user.id,
+      performedBy: session.user.id,
+      activityType: "deal_deleted",
+      description: `Deleted deal: ${deal.title} — ${deal.company}`,
+      entityType: "deal",
+      entityId: dealId,
+      ipAddress,
+      userAgent,
+    });
 
     if (managerId && managerId !== session.user.id) {
       await notifyDealDeleted({
