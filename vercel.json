@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/check-stalled-deals",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/monthly-target-reminder",
+      "schedule": "0 9 15 * *"
+    }
+  ]
+}
