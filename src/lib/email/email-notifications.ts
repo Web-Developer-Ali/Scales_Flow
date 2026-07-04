@@ -1,4 +1,4 @@
-import { sendEmail } from "./send-email";
+import { sendEmail, getEmailSettings } from "./email-provider";
 import {
   dealWonTemplate,
   dealStalledTemplate,
@@ -8,7 +8,7 @@ import {
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-// ── 1. Deal Won → notify manager ──────────────────────────────────────────────
+// ── 1. Deal Won → manager ─────────────────────────────────────────────────────
 export async function sendDealWonEmail(params: {
   managerEmail: string;
   managerName: string;
@@ -18,6 +18,9 @@ export async function sendDealWonEmail(params: {
   value: number;
   dealId: string;
 }) {
+  const settings = await getEmailSettings();
+  if (!settings.notify_deal_won) return;
+
   const { subject, html } = dealWonTemplate({
     managerName: params.managerName,
     repName: params.repName,
@@ -30,7 +33,7 @@ export async function sendDealWonEmail(params: {
   await sendEmail({ to: params.managerEmail, subject, html });
 }
 
-// ── 2. Deal Stalled → notify rep ─────────────────────────────────────────────
+// ── 2. Deal Stalled → rep ─────────────────────────────────────────────────────
 export async function sendDealStalledEmail(params: {
   repEmail: string;
   repName: string;
@@ -40,6 +43,9 @@ export async function sendDealStalledEmail(params: {
   daysStale: number;
   dealId: string;
 }) {
+  const settings = await getEmailSettings();
+  if (!settings.notify_deal_stalled) return;
+
   const { subject, html } = dealStalledTemplate({
     repName: params.repName,
     dealTitle: params.dealTitle,
@@ -52,8 +58,7 @@ export async function sendDealStalledEmail(params: {
   await sendEmail({ to: params.repEmail, subject, html });
 }
 
-// ── 3. New team member → welcome email ────────────────────────────────────────
-// This replaces / extends your existing sendRegistrationOtp
+// ── 3. Welcome new team member ────────────────────────────────────────────────
 export async function sendWelcomeEmail(params: {
   email: string;
   name: string;
@@ -61,6 +66,9 @@ export async function sendWelcomeEmail(params: {
   otp: string;
   createdByName: string;
 }) {
+  const settings = await getEmailSettings();
+  if (!settings.notify_welcome_member) return;
+
   const verificationUrl = `${BASE_URL}/otp-verification?email=${encodeURIComponent(params.email)}`;
 
   const { subject, html } = welcomeTeamMemberTemplate({
@@ -84,6 +92,9 @@ export async function sendMonthlyTargetEmail(params: {
   percent: number;
   monthLabel: string;
 }) {
+  const settings = await getEmailSettings();
+  if (!settings.notify_monthly_target) return;
+
   const { subject, html } = monthlyTargetTemplate({
     repName: params.repName,
     closedDeals: params.closedDeals,
@@ -95,3 +106,8 @@ export async function sendMonthlyTargetEmail(params: {
 
   await sendEmail({ to: params.repEmail, subject, html });
 }
+
+// ── OTP email: always uses nodemailer directly ────────────────────────────────
+// OTP is critical — it bypasses the enabled toggle so
+// new users can always verify even if notifications are off
+export { sendRegistrationOtp } from "./otp-service";
