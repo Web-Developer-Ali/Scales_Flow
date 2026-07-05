@@ -12,10 +12,19 @@ import {
   Menu,
   X,
   Activity,
+  User,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { GlobalSearch } from "@/components/shared/global-search";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -108,7 +117,47 @@ export function AdminNavbar() {
         </nav>
 
         {/* Right Section */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Global Search */}
+          <div className="hidden lg:block">
+            <GlobalSearch />
+          </div>
+
+          {/* Profile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Account Options"
+                className="hidden sm:flex"
+              >
+                <User className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/profile"
+                  className="flex cursor-pointer items-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Profile Page</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/admin/setting/email"
+                  className="flex cursor-pointer items-center gap-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Email Setting Page</span>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Logout */}
           <Button
             variant="outline"
             onClick={handleLogout}
@@ -132,35 +181,77 @@ export function AdminNavbar() {
         </div>
       </div>
 
-      {/* Mobile Navigation - Dropdown Menu */}
+      {/* Mobile Navigation */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-background animate-in fade-in slide-in-from-top-2">
-          <nav className="px-4 py-3 flex flex-col gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
+          <div className="px-4 py-3">
+            {/* Mobile Search */}
+            <div className="mb-3">
+              <GlobalSearch />
+            </div>
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
+            {/* Mobile Profile Options */}
+            <div className="mb-2 flex flex-col gap-2">
+              <Link href="/profile" onClick={() => setMobileMenuOpen(false)}>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start rounded-lg"
                 >
-                  <Button
-                    variant={isActive ? "default" : "ghost"}
-                    className={cn(
-                      "w-full justify-start rounded-lg",
-                      isActive && "bg-black hover:bg-black text-white",
-                    )}
+                  <User className="w-4 h-4 mr-2" />
+                  Profile Page
+                </Button>
+              </Link>
+              <Link
+                href="/admin/setting/email"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start rounded-lg"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Setting Page
+                </Button>
+              </Link>
+            </div>
+
+            <nav className="flex flex-col gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
                   >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {item.label}
-                  </Button>
-                </Link>
-              );
-            })}
-          </nav>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      className={cn(
+                        "w-full justify-start rounded-lg",
+                        isActive && "bg-black hover:bg-black text-white",
+                      )}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {item.label}
+                    </Button>
+                  </Link>
+                );
+              })}
+
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                className="w-full justify-start rounded-lg border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-500 mt-2"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </nav>
+          </div>
         </div>
       )}
     </header>

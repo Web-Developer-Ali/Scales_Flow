@@ -6,57 +6,74 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Card, CardContent, CardDescription,
-  CardHeader, CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import {
-  AlertCircle, CheckCircle2, Mail,
-  Save, Send, ToggleLeft, ToggleRight,
+  AlertCircle,
+  CheckCircle2,
+  Mail,
+  Save,
+  Send,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
+import { AdminNavbar } from "@/components/admin/navbar";
 
 interface Settings {
-  enabled:               boolean;
-  provider:              "nodemailer" | "resend";
-  smtp_service:          string | null;
-  smtp_host:             string | null;
-  smtp_port:             number | null;
-  smtp_user:             string | null;
-  smtp_password:         string | null;
-  smtp_from:             string | null;
-  resend_api_key:        string | null;
-  resend_from:           string | null;
-  notify_deal_won:       boolean;
-  notify_deal_stalled:   boolean;
+  enabled: boolean;
+  provider: "nodemailer" | "resend";
+  smtp_service: string | null;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_user: string | null;
+  smtp_password: string | null;
+  smtp_from: string | null;
+  resend_api_key: string | null;
+  resend_from: string | null;
+  notify_deal_won: boolean;
+  notify_deal_stalled: boolean;
   notify_monthly_target: boolean;
   notify_welcome_member: boolean;
 }
 
 const DEFAULT: Settings = {
-  enabled:               false,
-  provider:              "nodemailer",
-  smtp_service:          "gmail",
-  smtp_host:             null,
-  smtp_port:             587,
-  smtp_user:             null,
-  smtp_password:         null,
-  smtp_from:             null,
-  resend_api_key:        null,
-  resend_from:           null,
-  notify_deal_won:       true,
-  notify_deal_stalled:   true,
+  enabled: false,
+  provider: "nodemailer",
+  smtp_service: "gmail",
+  smtp_host: null,
+  smtp_port: 587,
+  smtp_user: null,
+  smtp_password: null,
+  smtp_from: null,
+  resend_api_key: null,
+  resend_from: null,
+  notify_deal_won: true,
+  notify_deal_stalled: true,
   notify_monthly_target: true,
   notify_welcome_member: true,
 };
 
 function Toggle({
-  label, sub, value, onChange,
+  label,
+  sub,
+  value,
+  onChange,
 }: {
-  label: string; sub?: string;
-  value: boolean; onChange: (v: boolean) => void;
+  label: string;
+  sub?: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
 }) {
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
@@ -69,25 +86,28 @@ function Toggle({
         onClick={() => onChange(!value)}
         className="flex-shrink-0 ml-4"
       >
-        {value
-          ? <ToggleRight className="w-8 h-8 text-primary" />
-          : <ToggleLeft  className="w-8 h-8 text-muted-foreground" />}
+        {value ? (
+          <ToggleRight className="w-8 h-8 text-primary" />
+        ) : (
+          <ToggleLeft className="w-8 h-8 text-muted-foreground" />
+        )}
       </button>
     </div>
   );
 }
 
 export function EmailSettingsClient() {
-  const [settings,   setSettings]   = useState<Settings>(DEFAULT);
-  const [loading,    setLoading]     = useState(true);
-  const [saving,     setSaving]      = useState(false);
-  const [testing,    setTesting]     = useState(false);
-  const [testEmail,  setTestEmail]   = useState("");
-  const [error,      setError]       = useState<string | null>(null);
-  const [success,    setSuccess]     = useState<string | null>(null);
+  const [settings, setSettings] = useState<Settings>(DEFAULT);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    axios.get("/api/admin/email-settings")
+    axios
+      .get("/api/admin/setting/email-settings")
       .then(({ data }) => {
         if (data.success && data.settings) {
           setSettings(data.settings);
@@ -105,7 +125,10 @@ export function EmailSettingsClient() {
     setError(null);
     setSuccess(null);
     try {
-      const { data } = await axios.patch("/api/admin/email-settings", settings);
+      const { data } = await axios.patch(
+        "/api/admin/setting/email-settings",
+        settings,
+      );
       if (!data.success) throw new Error(data.error);
       setSuccess("Email settings saved successfully.");
       setTimeout(() => setSuccess(null), 4000);
@@ -113,7 +136,7 @@ export function EmailSettingsClient() {
       setError(
         axios.isAxiosError(err) && err.response?.data?.error
           ? err.response.data.error
-          : "Failed to save settings"
+          : "Failed to save settings",
       );
     } finally {
       setSaving(false);
@@ -129,14 +152,16 @@ export function EmailSettingsClient() {
     setError(null);
     setSuccess(null);
     try {
-      const { data } = await axios.post("/api/admin/email-settings", { testEmail });
+      const { data } = await axios.post("/api/admin/setting/email-settings", {
+        testEmail,
+      });
       if (!data.success) throw new Error(data.error);
       setSuccess(data.message);
     } catch (err) {
       setError(
         axios.isAxiosError(err) && err.response?.data?.error
           ? err.response.data.error
-          : "Test failed — check your credentials"
+          : "Test failed — check your credentials",
       );
     } finally {
       setTesting(false);
@@ -153,6 +178,7 @@ export function EmailSettingsClient() {
 
   return (
     <main className="min-h-screen bg-background">
+      <AdminNavbar />
       <div className="border-b border-border bg-card/50">
         <div className="max-w-3xl mx-auto px-6 py-8">
           <div className="flex items-center gap-3 mb-1">
@@ -178,7 +204,9 @@ export function EmailSettingsClient() {
         {success && (
           <Alert className="border-emerald-500/30 bg-emerald-500/10">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <AlertDescription className="text-emerald-700">{success}</AlertDescription>
+            <AlertDescription className="text-emerald-700">
+              {success}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -198,9 +226,11 @@ export function EmailSettingsClient() {
                 type="button"
                 onClick={() => set("enabled", !settings.enabled)}
               >
-                {settings.enabled
-                  ? <ToggleRight className="w-10 h-10 text-primary" />
-                  : <ToggleLeft  className="w-10 h-10 text-muted-foreground" />}
+                {settings.enabled ? (
+                  <ToggleRight className="w-10 h-10 text-primary" />
+                ) : (
+                  <ToggleLeft className="w-10 h-10 text-muted-foreground" />
+                )}
               </button>
             </div>
           </CardHeader>
@@ -313,7 +343,7 @@ export function EmailSettingsClient() {
                       />
                       {settings.smtp_service === "gmail" && (
                         <p className="text-xs text-muted-foreground">
-                          Use a Gmail App Password, not your regular password.{' '}
+                          Use a Gmail App Password, not your regular password.{" "}
                           <a
                             href="https://support.google.com/accounts/answer/185833"
                             target="_blank"
@@ -331,7 +361,7 @@ export function EmailSettingsClient() {
                         From Name & Address
                       </label>
                       <Input
-                        placeholder='SalesFlow <your@gmail.com>'
+                        placeholder="SalesFlow <your@gmail.com>"
                         value={settings.smtp_from ?? ""}
                         onChange={(e) => set("smtp_from", e.target.value)}
                         className="bg-background border-border"
@@ -355,7 +385,7 @@ export function EmailSettingsClient() {
                         className="bg-background border-border"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Get your API key from{' '}
+                        Get your API key from{" "}
                         <a
                           href="https://resend.com"
                           target="_blank"
@@ -388,9 +418,7 @@ export function EmailSettingsClient() {
             {/* ── Notification Types ───────────────────────────────────── */}
             <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-base">
-                  Notification Types
-                </CardTitle>
+                <CardTitle className="text-base">Notification Types</CardTitle>
                 <CardDescription>
                   Choose which events trigger emails. All are on by default.
                 </CardDescription>

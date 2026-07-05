@@ -11,11 +11,13 @@ import {
   Menu,
   X,
   TrendingUp,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { GlobalSearch } from "@/components/shared/global-search";
 
 const navItems = [
   {
@@ -75,7 +77,7 @@ export function RepDashboardHeader() {
               SalesFlow
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Scales-rep Panel
+              Sales Rep Panel
             </p>
           </div>
         </Link>
@@ -107,7 +109,24 @@ export function RepDashboardHeader() {
         </nav>
 
         {/* Right Side */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Global Search */}
+          <div className="hidden lg:block">
+            <GlobalSearch />
+          </div>
+
+          {/* Profile */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/profile")}
+            title="My Profile"
+            className="hidden sm:flex"
+          >
+            <User className="w-5 h-5" />
+          </Button>
+
+          {/* Logout */}
           <Button
             variant="outline"
             onClick={handleLogout}
@@ -131,35 +150,65 @@ export function RepDashboardHeader() {
         </div>
       </div>
 
-      {/* Mobile Navigation - Dropdown Menu */}
+      {/* Mobile Navigation */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-background animate-in fade-in slide-in-from-top-2">
-          <nav className="px-4 py-3 flex flex-col gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
+          <div className="px-4 py-3">
+            {/* Mobile Search */}
+            <div className="mb-3">
+              <GlobalSearch />
+            </div>
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <Button
-                    variant={isActive ? "default" : "ghost"}
-                    className={cn(
-                      "w-full justify-start rounded-lg",
-                      isActive && "bg-black hover:bg-black text-white",
-                    )}
+            {/* Mobile Profile */}
+            <Button
+              variant="ghost"
+              className="w-full justify-start rounded-lg mb-2"
+              onClick={() => {
+                router.push("/profile");
+                setMobileMenuOpen(false);
+              }}
+            >
+              <User className="w-4 h-4 mr-2" />
+              My Profile
+            </Button>
+
+            <nav className="flex flex-col gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
                   >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {item.label}
-                  </Button>
-                </Link>
-              );
-            })}
-          </nav>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      className={cn(
+                        "w-full justify-start rounded-lg",
+                        isActive && "bg-black hover:bg-black text-white",
+                      )}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {item.label}
+                    </Button>
+                  </Link>
+                );
+              })}
+
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                className="w-full justify-start rounded-lg border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-500 mt-2"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </nav>
+          </div>
         </div>
       )}
     </header>
