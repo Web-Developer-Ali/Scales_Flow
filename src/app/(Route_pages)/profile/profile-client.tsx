@@ -22,7 +22,7 @@ import {
   Save,
 } from "lucide-react";
 import { AdminNavbar } from "@/components/admin/navbar";
-import { ManagerDashboardHeader } from "@/components/manager/manager_dashboard/manager-dashboard-header";
+import { ManagerDashboardHeader } from "@/components/manager/manager-dashboard-header";
 import { RepDashboardHeader } from "@/components/scales_man/navbar";
 
 const ROLE_LABELS: Record<string, string> = {

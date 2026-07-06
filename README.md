@@ -16,7 +16,7 @@ Track deals from first contact to closed. Manage your team with role-based acces
 
 <br />
 
-[Live Demo](https://scales-flow.vercel.app) · [Report a Bug](https://github.com/Web-Developer-Ali/scalesflow/issues) · [Request a Feature](https://github.com/Web-Developer-Ali/scalesflow/issues)
+[Live Demo](https://scales-flow.vercel.app) · [Report a Bug](https://github.com/Web-Developer-Ali/Scales_Flow/issues) · [Request a Feature](https://github.com/Web-Developer-Ali/Scales_Flow/scalesflow/issues)
 
 </div>
 
@@ -237,7 +237,7 @@ user_activities
 
 ```bash
 # Clone the repository
-git clone https://github.com/Web-Developer-Ali/scalesflow.git
+git clone https://github.com/Web-Developer-Ali/Scales_Flow
 cd scalesflow
 
 # Install dependencies
@@ -281,6 +281,11 @@ docker run --name salesflow-db \
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-here
 
+# ── NextAuth ──────────────────────────────────────────────────────────────────
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
+NODE_ENV=
+
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/salesflow
 # For Neon DB:
@@ -313,24 +318,24 @@ src/
 │   │   ├── admin/             # Admin dashboard, team, reports, activity, settings
 │   │   ├── manager/           # Manager dashboard, deals, reports, activity
 │   │   ├── scales_man/        # Rep dashboard, deals, clients, performance
+│   │   ├── deals/             # Deal create , [id] CRUD
 │   │   └── profile/           # Shared profile page (all roles)
 │   └── api/
 │       ├── admin/             # Team management, assign, block, delete, reports
+│       ├── auth /             # NextAuth setup, Email Verfication, register admin, resend otp
 │       ├── manager/           # Manager dashboard, deals, reports
 │       ├── sales-rep/         # Rep dashboard, deals, performance
 │       ├── deals/             # Create, [id] CRUD
 │       ├── clients/           # List, create, [id] CRUD, search
-│       ├── notifications/     # List, mark read
 │       ├── activity-feed/     # Admin + manager audit feed
 │       ├── search/            # Global search
 │       ├── profile/           # Profile read + update
-│       ├── email-settings/    # Admin email configuration
 │       └── cron/              # Stalled deals + monthly target jobs
 │
 ├── components/
-│   ├── admin_dashboard/       # Admin-specific components + hooks
-│   ├── manager_dashboard/     # Manager-specific components + hooks
-│   ├── salesRep_dashboard/    # Rep-specific components + hooks
+│   ├── admin/                 # Admin-specific components + hooks
+│   ├── manager/               # Manager-specific components + hooks
+│   ├── salesRep/              # Rep-specific components + hooks
 │   ├── clients/               # Client selector, hooks
 │   ├── deal_details/          # Deal detail hook
 │   ├── add_deals/             # Add deal form sections
@@ -340,6 +345,7 @@ src/
 ├── lib/
 │   ├── db.ts                  # PostgreSQL pool
 │   ├── notifications.ts       # In-app notification helpers
+│   ├── export-cvs.ts          # To generate performance file.
 │   └── email/
 │       ├── email-provider.ts  # Provider abstraction (nodemailer / resend)
 │       ├── email-notifications.ts
@@ -347,7 +353,11 @@ src/
 │       └── otp-service.ts     # OTP email (bypasses enabled toggle)
 │
 └── types/
-    └── admin_dashboard_types.ts
+│   └── Define type of all pages.
+└── schema/
+│   └── Define postgres table's schema.
+└── proxy.ts/
+    └── Middleware for handle role base routing.
 ```
 
 ---
@@ -358,14 +368,14 @@ All routes require authentication via NextAuth session cookie.
 
 ### Deals
 
-| Method   | Route                  | Auth         | Description                  |
-| -------- | ---------------------- | ------------ | ---------------------------- |
-| `POST`   | `/api/deals/create`    | rep, manager | Create a deal                |
-| `GET`    | `/api/deals/[id]`      | scoped       | Get deal detail              |
-| `PATCH`  | `/api/deals/[id]`      | scoped       | Update deal                  |
-| `DELETE` | `/api/deals/[id]`      | rep, admin   | Delete deal                  |
-| `GET`    | `/api/sales-rep/deals` | rep          | Rep's deal list with filters |
-| `GET`    | `/api/manager/deals`   | manager      | Team deal list with filters  |
+| Method                     | Route                  | Auth                                  | Description         |
+| -------------------------- | ---------------------- | ------------------------------------- | ------------------- |
+| `POST`                     | `/api/deals/create`    | rep, manager                          | Create a deal       |
+| `GET`                      | `.../deal-detail/[id]` | scoped                                | Get deal detail     |
+| `PATCH`                    | `.../deal-detail/[id]` | scoped                                | Update deal         |
+| `DELETE`                   | `.../deal-detail/[id]` | rep, admin                            | Delete deal         |
+| `GET`                      | `.../notification`     | manager                               | Fetch notifications |
+| `PATCH` `.../notification` | manager                | mark one or all notifications as read |
 
 ### Clients
 
@@ -400,13 +410,12 @@ All routes require authentication via NextAuth session cookie.
 
 ### Other
 
-| Route            | Auth                        | Description                     |
-| ---------------- | --------------------------- | ------------------------------- |
-| `GET/PATCH`      | `/api/notifications`        | Notification list + mark read   |
-| `GET`            | `/api/activity-feed`        | Audit feed (admin/manager)      |
-| `GET`            | `/api/search`               | Global search (deals + clients) |
-| `GET/PATCH`      | `/api/profile`              | Profile read + update           |
-| `GET/PATCH/POST` | `/api/admin/email-settings` | Email config + test             |
+| Route            | Auth                                | Description                     |
+| ---------------- | ----------------------------------- | ------------------------------- |
+| `GET`            | `/api/activity-feed`                | Audit feed (admin/manager)      |
+| `GET`            | `/api/search`                       | Global search (deals + clients) |
+| `GET/PATCH`      | `/api/profile`                      | Profile read + update           |
+| `GET/PATCH/POST` | `/api/admin/setting/email-settings` | Email config + test             |
 
 ---
 
@@ -514,7 +523,6 @@ Set `CRON_SECRET` in your environment — Vercel automatically passes it as an `
 - [ ] Retainer / recurring revenue tracking
 - [ ] Client portal (read-only deal view for clients)
 - [ ] Bulk email campaigns from within CRM
-- [ ] Mobile app (React Native)
 
 ---
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ManagerDashboardHeader } from "@/components/manager/manager_dashboard/manager-dashboard-header";
+import { ManagerDashboardHeader } from "@/components/manager/manager-dashboard-header";
 import { ActivityFeed } from "@/components/shared/activity-feed";
 
 function getEntityRoute(

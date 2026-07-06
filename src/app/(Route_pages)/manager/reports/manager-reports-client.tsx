@@ -32,7 +32,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useManagerReports } from "@/components/manager/reports/use-manager-reports";
-import { ManagerDashboardHeader } from "@/components/manager/manager_dashboard/manager-dashboard-header";
+import { ManagerDashboardHeader } from "@/components/manager/manager-dashboard-header";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function formatAmount(val: number): string {

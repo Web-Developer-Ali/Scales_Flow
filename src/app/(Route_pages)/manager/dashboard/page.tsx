@@ -1,6 +1,6 @@
 "use client";
 
-import { ManagerDashboardHeader } from "@/components/manager/manager_dashboard/manager-dashboard-header";
+import { ManagerDashboardHeader } from "@/components/manager/manager-dashboard-header";
 import { ManagerMetrics } from "@/components/manager/manager_dashboard/manager-metrics";
 import { PersonalPipeline } from "@/components/manager/manager_dashboard/personal-pipeline";
 import { TeamActivities } from "@/components/manager/manager_dashboard/team-activities";
@@ -32,10 +32,7 @@ export default function ManagerDashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           <div className="lg:col-span-2">
-            <TeamOverview
-              data={data?.repPerformance}
-              isLoading={loading}
-            />
+            <TeamOverview data={data?.repPerformance} isLoading={loading} />
           </div>
           <div className="lg:col-span-1">
             <PersonalPipeline

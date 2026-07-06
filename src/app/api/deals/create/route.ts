@@ -12,8 +12,6 @@ const VALID_STAGES = [
   "closed",
 ] as const;
 
-const VALID_STATUSES = ["active", "won", "lost", "on-hold"] as const;
-
 function getClientIp(req: Request): string | null {
   const forwardedFor = req.headers.get("x-forwarded-for");
   if (forwardedFor) {
