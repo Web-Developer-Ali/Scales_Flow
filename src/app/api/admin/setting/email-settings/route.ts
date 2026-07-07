@@ -65,7 +65,6 @@ export async function PATCH(req: Request) {
       notify_welcome_member,
     } = body;
 
-    // Validate provider
     if (provider && !["nodemailer", "resend"].includes(provider)) {
       return NextResponse.json(
         { success: false, error: "Invalid provider" },
@@ -73,8 +72,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Build update — only update fields that were sent
-    // If smtp_password is "••••••••" (masked), skip it to preserve the existing value
     const updates: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -94,7 +91,6 @@ export async function PATCH(req: Request) {
       notify_welcome_member,
     };
 
-    // Only update password if a real value was sent (not the masked placeholder)
     if (smtp_password && smtp_password !== "••••••••") {
       fields.smtp_password = smtp_password;
     }
@@ -117,11 +113,33 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Add updated_by and updated_at
     updates.push(`updated_at = NOW()`, `updated_by = $${idx}`);
     values.push(session.user.id);
 
-    await query(`UPDATE email_settings SET ${updates.join(", ")}`, values);
+    // Guarantee the singleton row exists before updating it.
+    // Table is empty unless the seed insert has run for this env — this
+    // makes the endpoint self-healing instead of silently no-op'ing.
+    await query(
+      `INSERT INTO email_settings (enabled, provider)
+       VALUES (FALSE, 'nodemailer')
+       ON CONFLICT ((TRUE)) DO NOTHING`,
+    );
+
+    const result = await query(
+      `UPDATE email_settings
+       SET ${updates.join(", ")}
+       WHERE id = (SELECT id FROM email_settings LIMIT 1)`,
+      values,
+    );
+
+    if (result.rowCount === 0) {
+      // Should be unreachable now, but keep this as a hard signal if it recurs
+      console.error("Email Settings PATCH: update matched 0 rows unexpectedly");
+      return NextResponse.json(
+        { success: false, error: "Settings row not found" },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({
       success: true,

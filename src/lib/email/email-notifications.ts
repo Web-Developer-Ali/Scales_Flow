@@ -91,9 +91,15 @@ export async function sendMonthlyTargetEmail(params: {
   totalCreated: number;
   percent: number;
   monthLabel: string;
-}) {
+}): Promise<boolean> {
   const settings = await getEmailSettings();
-  if (!settings.notify_monthly_target) return;
+  if (!settings.notify_monthly_target) {
+    console.log(
+      "[Email] Monthly target notifications disabled, skipping email for",
+      params.repEmail,
+    );
+    return false;
+  }
 
   const { subject, html } = monthlyTargetTemplate({
     repName: params.repName,
@@ -104,7 +110,7 @@ export async function sendMonthlyTargetEmail(params: {
     dashboardUrl: `${BASE_URL}/scales_man/dashboard`,
   });
 
-  await sendEmail({ to: params.repEmail, subject, html });
+  return await sendEmail({ to: params.repEmail, subject, html });
 }
 
 // ── OTP email: always uses nodemailer directly ────────────────────────────────

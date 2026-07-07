@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { notifyDealAssigned } from "@/lib/notifications";
+import { sendDealStalledEmail } from "@/lib/email/email-notifications";
 
 const VALID_STAGES = [
   "prospect",
@@ -235,21 +236,45 @@ export async function POST(req: Request) {
     const currentUser = userRows[0];
     const managerId = currentUser?.manager_id;
 
-    // Only send notification if the user has a manager assigned
     if (managerId) {
       await notifyDealAssigned({
-        managerId: managerId,
+        managerId,
         dealTitle: deal.title,
         dealId: deal.id,
         companyName: deal.company,
       });
+
+      // Look up the manager's own contact details for email
+      const { rows: managerRows } = await query(
+        `SELECT email, name FROM users WHERE id = $1`,
+        [managerId],
+      );
+      const managerEmail = managerRows[0]?.email;
+      const managerName = managerRows[0]?.name ?? "Manager";
+
+      if (managerEmail) {
+        // Note: reusing the "stalled" template as a stand-in for now —
+        // consider adding a real dealCreatedTemplate since the copy
+        // ("hasn't been updated in X days") doesn't fit a brand-new deal
+        sendDealStalledEmail({
+          repEmail: managerEmail,
+          repName: managerName,
+          dealTitle: deal.title,
+          company: deal.company as string,
+          stage: deal.stage,
+          daysStale: 0,
+          dealId: deal.id,
+        }).catch((err) => console.error("[Deal Created Email] Failed:", err));
+      } else {
+        console.warn(
+          `[Deal Created Email] Skipped — no email for manager ${managerId}`,
+        );
+      }
     } else {
-      // Log that notification was skipped (user doesn't have a manager)
       console.log(
         `Notification skipped: User ${session.user.id} (${currentUser?.name || "Unknown"}) doesn't have a manager assigned`,
       );
     }
-
     return NextResponse.json({
       success: true,
       message: "Deal created successfully",

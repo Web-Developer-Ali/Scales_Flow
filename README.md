@@ -320,6 +320,7 @@ src/
 │   │   ├── scales_man/        # Rep dashboard, deals, clients, performance
 │   │   ├── deals/             # Deal create , [id] CRUD
 │   │   └── profile/           # Shared profile page (all roles)
+│   │   └── clients/           # clients detaila and CRUD opertions (all roles)
 │   └── api/
 │       ├── admin/             # Team management, assign, block, delete, reports
 │       ├── auth /             # NextAuth setup, Email Verfication, register admin, resend otp
@@ -543,4 +544,3 @@ Built with Next.js, PostgreSQL, and a lot of CTEs.
 ⭐ Star this repo if it helped you build something real.
 
 </div>
-EOF

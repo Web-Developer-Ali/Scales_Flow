@@ -8,6 +8,7 @@ import {
   notifyDealLost,
   notifyDealDeleted,
 } from "@/lib/notifications";
+import { sendDealWonEmail } from "@/lib/email/email-notifications";
 
 function getClientIp(req: Request): string | null {
   const forwardedFor = req.headers.get("x-forwarded-for");
@@ -335,13 +336,25 @@ export async function PATCH(
 
     // Notify manager when deal is won or lost or deal stage is changed
     if (statusChanged || stageChanged) {
-      const { rows: managerRows } = await query(
+      const { rows: repRows } = await query(
         `SELECT u.manager_id, u.name
-         FROM users u WHERE u.id = $1`,
+     FROM users u WHERE u.id = $1`,
         [deal.assigned_to ?? session.user.id],
       );
-      const managerId = managerRows[0]?.manager_id;
-      const repName = managerRows[0]?.name ?? "Your rep";
+      const managerId = repRows[0]?.manager_id;
+      const repName = repRows[0]?.name ?? "Your rep";
+
+      // Fetch the manager's own contact details separately
+      let managerEmail: string | undefined;
+      let managerName: string | undefined;
+      if (managerId) {
+        const { rows: managerDetailRows } = await query(
+          `SELECT email, name FROM users WHERE id = $1`,
+          [managerId],
+        );
+        managerEmail = managerDetailRows[0]?.email;
+        managerName = managerDetailRows[0]?.name;
+      }
 
       if (managerId && stageChanged) {
         await notifyDealStageChanged({
@@ -353,6 +366,7 @@ export async function PATCH(
           toStage: body.stage,
         });
       }
+
       if (managerId && body.status === "won") {
         await notifyDealWon({
           managerId,
@@ -362,7 +376,25 @@ export async function PATCH(
           dealValue: Number(deal.value),
           companyName: deal.company as string,
         });
+
+        // email notification to manager about deal won
+        if (managerEmail) {
+          sendDealWonEmail({
+            managerEmail,
+            managerName: managerName ?? "Manager",
+            repName,
+            dealTitle: deal.title as string,
+            company: deal.company as string,
+            value: Number(deal.value),
+            dealId,
+          });
+        } else {
+          console.warn(
+            `[Deal Won Email] Skipped — no email found for manager ${managerId}`,
+          );
+        }
       }
+
       if (managerId && body.status === "lost") {
         await notifyDealLost({
           managerId,

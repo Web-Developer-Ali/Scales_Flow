@@ -122,13 +122,13 @@ export function GlobalSearch() {
   }, [query, search]);
 
   const handleDealClick = (deal: DealResult) => {
-    router.push(`/scales_man/deal_details/${deal.id}`);
+    router.push(`/deals/deal_details/${deal.id}`);
     setOpen(false);
     setQuery("");
   };
 
   const handleClientClick = (client: ClientResult) => {
-    router.push(`/scales_man/clients/${client.id}`);
+    router.push(`/clients/${client.id}`);
     setOpen(false);
     setQuery("");
   };

@@ -45,6 +45,8 @@ export async function GET(req: Request) {
     );
 
     let notified = 0;
+    let emailFailures = 0;
+    let notificationFailures = 0;
 
     for (const rep of reps) {
       const closedDeals = Number(rep.closed_deals);
@@ -52,31 +54,49 @@ export async function GET(req: Request) {
       const percent =
         totalCreated > 0 ? Math.round((closedDeals / totalCreated) * 100) : 0;
 
-      // In-app notification
-      await notifyMonthlyTarget({
-        repId: rep.id,
-        closedDeals,
-        totalCreated,
-        percent,
-      });
+      try {
+        await notifyMonthlyTarget({
+          repId: rep.id,
+          closedDeals,
+          totalCreated,
+          percent,
+        });
+      } catch (err) {
+        notificationFailures += 1;
+        console.error(
+          `Monthly Target notification failed for rep ${rep.id}:`,
+          err,
+        );
+      }
 
-      // Email notification
-      await sendMonthlyTargetEmail({
-        repEmail: rep.email,
-        repName: rep.name,
-        closedDeals,
-        totalCreated,
-        percent,
-        monthLabel,
-      });
+      try {
+        const emailSent = await sendMonthlyTargetEmail({
+          repEmail: rep.email,
+          repName: rep.name,
+          closedDeals,
+          totalCreated,
+          percent,
+          monthLabel,
+        });
 
-      notified++;
+        if (!emailSent) {
+          emailFailures += 1;
+        }
+      } catch (err) {
+        emailFailures += 1;
+        console.error(`Monthly Target email failed for rep ${rep.id}:`, err);
+      }
+
+      notified += 1;
     }
 
     return NextResponse.json({
       success: true,
       month: monthLabel,
+      checked: reps.length,
       notified,
+      emailFailures,
+      notificationFailures,
     });
   } catch (err) {
     console.error("Monthly Target Cron Error:", err);

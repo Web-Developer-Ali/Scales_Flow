@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { sendRegistrationOtp } from "@/lib/email/otp-service";
+import { sendWelcomeEmail } from "@/lib/email/email-notifications";
 
 function getClientIp(req: Request): string | null {
   const forwardedFor = req.headers.get("x-forwarded-for");
@@ -76,21 +77,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const verificationLink = `${process.env.NEXTAUTH_URL}/otp-verification?email=${encodeURIComponent(email)}`;
-
-    const emailResult = await sendRegistrationOtp(
-      email,
+    await sendWelcomeEmail({
+      email: email.toLowerCase().trim(),
+      name: name.trim(),
       role,
       otp,
-      verificationLink,
-    );
-
-    if (!emailResult.success) {
-      return NextResponse.json(
-        { success: false, error: emailResult.message },
-        { status: 500 },
-      );
-    }
+      createdByName: session.user.name ?? "Admin",
+    });
 
     return NextResponse.json({
       success: true,

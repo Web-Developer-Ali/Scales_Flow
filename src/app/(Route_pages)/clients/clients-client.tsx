@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { useClients } from "@/components/clients/use-clients";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import axios from "axios";
+import { ManagerDashboardHeader } from "@/components/manager/manager-dashboard-header";
 import { RepDashboardHeader } from "@/components/scales_man/navbar";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -280,6 +282,7 @@ function AddClientDialog({
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export function ClientsClient() {
   const router = useRouter();
+  const { data: session } = useSession();
   const {
     clients,
     summary,
@@ -295,10 +298,15 @@ export function ClientsClient() {
 
   const [addOpen, setAddOpen] = useState(false);
 
+  const Header =
+    session?.user?.role === "manager"
+      ? ManagerDashboardHeader
+      : RepDashboardHeader;
+
   return (
     <main className="min-h-screen bg-background">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <RepDashboardHeader />
+      <Header />
       <div className="border-b border-border bg-card/50">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between mb-6">
