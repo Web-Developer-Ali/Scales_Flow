@@ -8,11 +8,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecentDealsProps } from "@/types/admin/admin_dashboard_types";
-import { useRouter } from "next/navigation";
 
 // Keys match DB enum (lowercase)
 const STAGE_COLORS: Record<string, string> = {
@@ -37,7 +34,6 @@ export function RecentDeals({
   data = [],
   isLoading = false,
 }: RecentDealsProps) {
-  const route = useRouter();
   return (
     <Card className="bg-card border-border">
       <CardHeader>
@@ -124,7 +120,7 @@ export function RecentDeals({
               </table>
             </div>
 
-            <div className="mt-6 flex justify-center">
+            {/* <div className="mt-6 flex justify-center">
               <Button
                 onClick={() => route.push("/deals/get_allDeals")}
                 variant="ghost"
@@ -132,7 +128,7 @@ export function RecentDeals({
               >
                 View All Deals <ChevronRight className="w-4 h-4" />
               </Button>
-            </div>
+            </div> */}
           </>
         )}
       </CardContent>

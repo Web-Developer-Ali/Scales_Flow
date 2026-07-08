@@ -3,7 +3,6 @@ import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
-import { sendRegistrationOtp } from "@/lib/email/otp-service";
 import { sendWelcomeEmail } from "@/lib/email/email-notifications";
 
 function getClientIp(req: Request): string | null {

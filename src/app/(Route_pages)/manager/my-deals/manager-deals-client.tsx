@@ -293,7 +293,7 @@ export function ManagerDealsClient() {
                         <div className="flex gap-3 text-xs text-muted-foreground ml-8">
                           <span>{rep.active_deals} active</span>
                           <span className="text-emerald-500">
-                            {rep.won_deals} won
+                            {rep.won_deals} won this month
                           </span>
                         </div>
                       </button>
