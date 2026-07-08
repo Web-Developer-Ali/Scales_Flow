@@ -501,7 +501,7 @@ export function ClientsClient() {
             {clients.map((client) => (
               <div
                 key={client.id}
-                onClick={() => router.push(`/scales_man/clients/${client.id}`)}
+                onClick={() => router.push(`/clients/${client.id}`)}
                 className="p-5 rounded-lg bg-card border border-border hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
               >
                 {/* Top row */}
