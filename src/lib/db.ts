@@ -6,29 +6,20 @@ declare global {
 
 const isProd = process.env.NODE_ENV === "production";
 
-// Decode CA cert if available
-const caCert =
-  isProd && process.env.RDS_CA_BUNDLE
-    ? Buffer.from(process.env.RDS_CA_BUNDLE, "base64").toString("utf8")
-    : undefined;
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not defined");
+}
 
-// Create or reuse pool
 const pool =
   global._pgPool ??
   new Pool({
-    host: process.env.PGHOST,
-    port: Number(process.env.PGPORT),
-    user: process.env.PGUSER,
-    password: process.env.PGPASSWORD,
-    database: process.env.PGDATABASE,
+    connectionString: process.env.DATABASE_URL,
 
     ...(isProd && {
       ssl: {
-        ca: caCert,
         rejectUnauthorized: true,
       },
     }),
-
     // Performance tuning
     max: 15,
     idleTimeoutMillis: 30000,
@@ -36,10 +27,10 @@ const pool =
     statement_timeout: 5000,
   });
 
-// assign to global to prevent multiple pools in dev
-if (!isProd) global._pgPool = pool;
+if (!isProd) {
+  global._pgPool = pool;
+}
 
-// Wrapper query function with logging
 export async function query(text: string, params?: unknown[]) {
   try {
     return await pool.query(text, params);
@@ -50,11 +41,11 @@ export async function query(text: string, params?: unknown[]) {
   }
 }
 
-// Transaction wrapper
 export async function withTransaction<T>(
   callback: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
+
   try {
     await client.query("BEGIN");
     const result = await callback(client);

@@ -203,7 +203,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <h2 className="text-lg font-semibold">Client not found</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            This client doesn't exist or you don't have access.
+            This client doesn&apos;t exist or you don&apos;t have access.
           </p>
           <Button className="mt-4" onClick={() => router.back()}>
             Go Back
@@ -545,7 +545,7 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
                   <div
                     key={deal.id}
                     onClick={() =>
-                      router.push(`/scales_man/deal_details/${deal.id}`)
+                      router.push(`/deals/deal_details/${deal.id}`)
                     }
                     className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 border border-border hover:border-primary/30 hover:bg-secondary/50 transition-all cursor-pointer group"
                   >

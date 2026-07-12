@@ -72,7 +72,15 @@ export async function proxy(req: NextRequest) {
   // 4. Get JWT token
   let token: Awaited<ReturnType<typeof getToken>>;
   try {
-    token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+      cookieName:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+    });
+    // token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   } catch {
     return NextResponse.redirect(new URL("/login", req.url));
   }
