@@ -86,9 +86,16 @@ export async function proxy(req: NextRequest) {
   }
 
   // 5. Handle auth pages (login, signup, etc.)
-  //    Logged-in users should not see these — redirect to their dashboard
+  //    Logged-in users should not see most auth pages — except forced reset.
   if (AUTH_PAGES.has(pathname)) {
     if (token) {
+      if (
+        pathname === "/reset-password" &&
+        token.must_reset_password === true
+      ) {
+        return NextResponse.next();
+      }
+
       const role = token.role as string;
       const dashboard = ROLE_DASHBOARDS[role] ?? "/login";
       return NextResponse.redirect(new URL(dashboard, req.url));
@@ -128,7 +135,20 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(verifyUrl);
   }
 
-  // 9. Role-based access control
+  // 9. Force password reset — admin created users must set their own password
+  if (
+    token.must_reset_password === true &&
+    pathname !== "/reset-password" &&
+    pathname !== "/api/auth/reset-password" &&
+    !pathname.startsWith("/api/auth")
+  ) {
+    const resetUrl = new URL("/reset-password", req.url);
+    resetUrl.searchParams.set("forced", "true");
+    resetUrl.searchParams.set("email", (token.email as string) ?? "");
+    return NextResponse.redirect(resetUrl);
+  }
+
+  // 10. Role-based access control
   //    Check each protected prefix and enforce role
   for (const [prefix, allowedRoles] of Object.entries(ROLE_ACCESS)) {
     if (pathname.startsWith(prefix)) {
@@ -141,7 +161,7 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // 10. Authenticated but no specific role restriction — allow
+  // 11. Authenticated but no specific role restriction — allow
   return NextResponse.next();
 }
 

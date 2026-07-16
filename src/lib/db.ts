@@ -9,7 +9,6 @@ const isProd = process.env.NODE_ENV === "production";
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not defined");
 }
-
 const pool =
   global._pgPool ??
   new Pool({
@@ -20,6 +19,7 @@ const pool =
         rejectUnauthorized: true,
       },
     }),
+    // ssl: false, // Disable SSL for local development
     // Performance tuning
     max: 15,
     idleTimeoutMillis: 30000,

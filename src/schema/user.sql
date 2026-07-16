@@ -41,7 +41,8 @@ CREATE TABLE users (
     login_count INTEGER NOT NULL DEFAULT 0,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
     last_failed_login_at TIMESTAMPTZ,
-
+    must_reset_password BOOLEAN NOT NULL DEFAULT FALSE,
+    
     -- ACCOUNT STATUS
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
@@ -85,6 +86,10 @@ CREATE INDEX idx_users_created_at ON users (created_at);
 CREATE INDEX IF NOT EXISTS idx_users_manager_id
     ON users (manager_id)
     WHERE manager_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_must_reset
+    ON users (id, must_reset_password)
+    WHERE must_reset_password = TRUE;
 
 -- Only one admin allowed — enforced at app layer AND here as partial unique index
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_single_admin
@@ -135,29 +140,27 @@ WHERE u.role = 'scales_man'
 -- ================================
 
 CREATE OR REPLACE FUNCTION create_user_with_role(
-    p_email VARCHAR,
+    p_email         VARCHAR,
     p_password_hash VARCHAR,
-    p_name VARCHAR,
-    p_role VARCHAR DEFAULT NULL,
-    p_company_name VARCHAR DEFAULT NULL,
-    p_created_by UUID DEFAULT NULL,
-    p_auth_provider VARCHAR DEFAULT 'credentials',
-    p_provider_id TEXT DEFAULT NULL,
-    p_ip_address INET DEFAULT NULL,
-    p_user_agent TEXT DEFAULT NULL
+    p_name          VARCHAR,
+    p_role          VARCHAR    DEFAULT NULL,
+    p_company_name  VARCHAR    DEFAULT NULL,
+    p_created_by    UUID       DEFAULT NULL,
+    p_auth_provider VARCHAR    DEFAULT 'credentials',
+    p_provider_id   TEXT       DEFAULT NULL,
+    p_ip_address    INET       DEFAULT NULL,
+    p_user_agent    TEXT       DEFAULT NULL
 )
 RETURNS TABLE(user_id UUID, otp VARCHAR) AS $$
 DECLARE
-    v_user_id UUID;
+    v_user_id      UUID;
     v_creator_role VARCHAR;
-    v_otp VARCHAR(6);
-    v_expires_at TIMESTAMPTZ;
-    v_admin_count INT;
+    v_otp          VARCHAR(6);
+    v_expires_at   TIMESTAMPTZ;
+    v_admin_count  INT;
 BEGIN
-    -- Count admins
     SELECT COUNT(*) INTO v_admin_count FROM users WHERE role = 'admin';
 
-    -- Role logic
     IF p_role IS NULL THEN
         IF v_admin_count = 0 THEN
             p_role := 'admin';
@@ -167,30 +170,25 @@ BEGIN
     END IF;
 
     IF p_role NOT IN ('admin', 'manager', 'scales_man') THEN
-        RAISE EXCEPTION 'Invalid role';
+        RAISE EXCEPTION 'Invalid role: %', p_role;
     END IF;
 
     IF p_role = 'admin' AND v_admin_count > 0 THEN
         RAISE EXCEPTION 'Only one admin allowed';
     END IF;
 
-    -- OTP
     v_otp := LPAD(FLOOR(RANDOM() * 1000000)::TEXT, 6, '0');
 
-    -- Creator permission logic
     IF p_created_by IS NOT NULL THEN
         SELECT role INTO STRICT v_creator_role
-        FROM users
-        WHERE id = p_created_by;
+        FROM users WHERE id = p_created_by;
 
-        IF p_role = 'admin' AND v_creator_role != 'admin' THEN
+        IF p_role = 'admin'      AND v_creator_role != 'admin' THEN
             RAISE EXCEPTION 'Only admin can create admin';
         END IF;
-
-        IF p_role = 'manager' AND v_creator_role != 'admin' THEN
+        IF p_role = 'manager'    AND v_creator_role != 'admin' THEN
             RAISE EXCEPTION 'Only admin can create manager';
         END IF;
-
         IF p_role = 'scales_man' AND v_creator_role NOT IN ('admin', 'manager') THEN
             RAISE EXCEPTION 'Invalid permission';
         END IF;
@@ -203,11 +201,9 @@ BEGIN
         IF p_role != 'admin' THEN
             RAISE EXCEPTION 'First user must be admin';
         END IF;
-
         v_expires_at := NOW() + INTERVAL '10 minutes';
     END IF;
 
-    -- Insert user
     INSERT INTO users (
         email,
         auth_provider,
@@ -218,7 +214,12 @@ BEGIN
         company_name,
         created_by,
         email_otp,
-        email_otp_expires_at
+        email_otp_expires_at,
+        -- ── New: force password reset for admin-created users ──────────────
+        -- Admin sets a temporary password on behalf of the user.
+        -- User must replace it on first login.
+        -- Admin registering themselves is exempt (they chose their own password).
+        must_reset_password
     )
     VALUES (
         p_email,
@@ -230,11 +231,13 @@ BEGIN
         p_company_name,
         p_created_by,
         v_otp,
-        v_expires_at
+        v_expires_at,
+        -- TRUE for manager and scales_man (admin created them)
+        -- FALSE for admin (first user, set their own password)
+        CASE WHEN p_role IN ('manager', 'scales_man') THEN TRUE ELSE FALSE END
     )
     RETURNING id INTO v_user_id;
 
-    -- ACTIVITY LOGGING (Only for manager and scales_man) — now with ip/user_agent
     IF p_role IN ('manager', 'scales_man') THEN
         INSERT INTO user_activities (
             user_id,
@@ -262,7 +265,7 @@ BEGIN
 
 EXCEPTION
     WHEN unique_violation THEN
-        RAISE EXCEPTION 'Email already exists';
+        RAISE EXCEPTION 'Email already exists: %', p_email;
 END;
 $$ LANGUAGE plpgsql;
 

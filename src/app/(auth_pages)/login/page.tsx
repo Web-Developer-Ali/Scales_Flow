@@ -2,8 +2,8 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -15,6 +15,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Changed from `export function login()` to `export default function LoginPage()`
 export default function LoginPage() {
@@ -22,10 +23,22 @@ export default function LoginPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    rememberMe: false,
+  const [formData, setFormData] = useState(() => {
+    if (typeof window === "undefined") {
+      return {
+        email: "",
+        password: "",
+        rememberMe: false,
+      };
+    }
+
+    const rememberedEmail = window.localStorage.getItem("rememberedEmail");
+
+    return {
+      email: rememberedEmail ?? "",
+      password: "",
+      rememberMe: Boolean(rememberedEmail),
+    };
   });
   const [errors, setErrors] = useState<{
     email?: string;
@@ -33,16 +46,8 @@ export default function LoginPage() {
     general?: string;
   }>({});
 
-  useEffect(() => {
-    const rememberedEmail = localStorage.getItem("rememberedEmail");
-    if (rememberedEmail) {
-      setFormData((prev) => ({
-        ...prev,
-        email: rememberedEmail,
-        rememberMe: true,
-      }));
-    }
-  }, []);
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get("reset") === "success";
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,10 +69,11 @@ export default function LoginPage() {
   // Validate form
   const validateForm = () => {
     const newErrors: typeof errors = {};
+    const normalizedEmail = formData.email.trim().toLowerCase();
 
-    if (!formData.email.trim()) {
+    if (!normalizedEmail) {
       newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       newErrors.email = "Please enter a valid email address";
     }
 
@@ -89,8 +95,9 @@ export default function LoginPage() {
     setErrors({});
 
     try {
+      const normalizedEmail = formData.email.trim().toLowerCase();
       const result = await signIn("credentials", {
-        email: formData.email,
+        email: normalizedEmail,
         password: formData.password,
         redirect: false,
       });
@@ -98,9 +105,9 @@ export default function LoginPage() {
       if (result?.ok) {
         toast.success("Login successful!");
         if (formData.rememberMe) {
-          localStorage.setItem("rememberedEmail", formData.email);
+          window.localStorage.setItem("rememberedEmail", normalizedEmail);
         } else {
-          localStorage.removeItem("rememberedEmail");
+          window.localStorage.removeItem("rememberedEmail");
         }
         router.refresh();
       } else {
@@ -147,6 +154,15 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          {resetSuccess && (
+            <Alert className="mb-6 border-emerald-500/30 bg-emerald-500/10">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <AlertDescription className="text-emerald-700">
+                Password reset successfully. You can now log in.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Error Message */}
           {errors.general && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -182,6 +198,7 @@ export default function LoginPage() {
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
+                  autoComplete="email"
                   className={`block w-full pl-10 pr-3 py-3 rounded-lg border ${
                     errors.email
                       ? "border-red-300 focus:ring-red-500 focus:border-red-500"
@@ -236,6 +253,7 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={handleChange}
+                  autoComplete="current-password"
                   className={`block w-full pl-10 pr-10 py-3 rounded-lg border ${
                     errors.password
                       ? "border-red-300 focus:ring-red-500 focus:border-red-500"
@@ -331,7 +349,7 @@ export default function LoginPage() {
           {/* Sign Up Link */}
           <div className="mt-8 text-center">
             <p className="text-sm text-slate-600">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link
                 href="/register_admin"
                 className="font-semibold text-blue-600 hover:text-blue-500 disabled:opacity-50"

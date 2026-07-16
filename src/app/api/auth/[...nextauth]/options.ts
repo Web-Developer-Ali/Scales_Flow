@@ -100,6 +100,7 @@ export const authOptions: NextAuthOptions = {
             companyName: user.company_name,
             is_verified: user.is_verified,
             is_active: user.is_active,
+            must_reset_password: user.must_reset_password,
           };
         } catch (error) {
           console.error("Auth error:", error);
@@ -114,25 +115,21 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
-        token.companyName = user.companyName ?? null;
-        token.email = user.email;
-        token.name = user.name;
         token.is_verified = user.is_verified;
         token.is_active = user.is_active;
+        token.must_reset_password = user.must_reset_password;
       }
       return token;
     },
 
     async session({ session, token }) {
-      session.user = {
-        id: token.id as string,
-        role: token.role as UserRole,
-        companyName: (token.companyName as string) ?? null,
-        email: token.email as string,
-        name: token.name as string,
-        is_active: token.is_active as boolean,
-        is_verified: token.is_verified as boolean,
-      };
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as UserRole;
+        session.user.is_verified = token.is_verified as boolean;
+        session.user.is_active = token.is_active as boolean;
+        session.user.must_reset_password = token.must_reset_password as boolean;
+      }
       return session;
     },
   },

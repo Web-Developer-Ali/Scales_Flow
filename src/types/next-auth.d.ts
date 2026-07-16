@@ -1,4 +1,4 @@
-import NextAuth, { DefaultSession } from "next-auth";
+import { DefaultSession } from "next-auth";
 import { JWT as DefaultJWT } from "next-auth/jwt";
 
 /* ============================================================
@@ -20,6 +20,7 @@ export interface DatabaseUser {
   company_name: string | null;
   is_active: boolean;
   is_verified: boolean;
+  must_reset_password: boolean;
   failed_login_attempts: number;
   last_failed_login_at: Date | null;
 }
@@ -38,6 +39,7 @@ declare module "next-auth" {
       name?: string | null;
       is_active?: boolean;
       is_verified?: boolean;
+      must_reset_password: boolean;
     };
   }
 
@@ -49,6 +51,7 @@ declare module "next-auth" {
     name: string;
     is_verified?: boolean;
     is_active?: boolean;
+    must_reset_password?: boolean;
   }
 }
 
@@ -63,5 +66,6 @@ declare module "next-auth/jwt" {
     companyName?: string | null;
     is_verified?: boolean;
     is_active?: boolean;
+    must_reset_password?: boolean;
   }
 }
