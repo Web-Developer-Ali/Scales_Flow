@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import Head from "next/head";
 import axios from "axios";
 
-export default function OTPVerificationPage() {
+function OTPVerificationForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -48,7 +48,7 @@ export default function OTPVerificationPage() {
     if (errorParam === "unverified") {
       setIsUnverifiedUser(true);
       setMessage(
-        "Please verify your email address to continue. Check your inbox for the verification code."
+        "Please verify your email address to continue. Check your inbox for the verification code.",
       );
     } else if (errorParam) {
       setStatus("error");
@@ -168,7 +168,7 @@ export default function OTPVerificationPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Failed to send verification email. Please try again."
+          : "Failed to send verification email. Please try again.",
       );
       toast.error("Failed to resend email");
     } finally {
@@ -212,176 +212,193 @@ export default function OTPVerificationPage() {
 
   return (
     <>
-    <Head>
+      <Head>
         <title>Email Verification | Smart Feedback Portal</title>
-        <meta 
-          name="description" 
-          content="Verify your email address to access your Smart Feedback Portal account. Enter the 6-digit OTP sent to your email." 
+        <meta
+          name="description"
+          content="Verify your email address to access your Smart Feedback Portal account. Enter the 6-digit OTP sent to your email."
         />
-        <meta name="keywords" content="email verification, OTP verification, account verification, Smart Feedback" />
-        <meta property="og:title" content="Email Verification | Smart Feedback Portal" />
-        <meta property="og:description" content="Verify your email address to access your account" />
+        <meta
+          name="keywords"
+          content="email verification, OTP verification, account verification, Smart Feedback"
+        />
+        <meta
+          property="og:title"
+          content="Email Verification | Smart Feedback Portal"
+        />
+        <meta
+          property="og:description"
+          content="Verify your email address to access your account"
+        />
         <meta property="og:type" content="website" />
         <link rel="canonical" href="/otp-verification" />
       </Head>
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <Mail className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isUnverifiedUser
-              ? "Email Verification Required"
-              : "Verify Your Email"}
-          </h1>
-          <p className="text-gray-600 mt-2">
-            {isUnverifiedUser
-              ? "Your account needs email verification to continue"
-              : "Enter the 6-digit code sent to your email"}
-          </p>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center">
+            <Mail className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isUnverifiedUser
+                ? "Email Verification Required"
+                : "Verify Your Email"}
+            </h1>
+            <p className="text-gray-600 mt-2">
+              {isUnverifiedUser
+                ? "Your account needs email verification to continue"
+                : "Enter the 6-digit code sent to your email"}
+            </p>
+          </div>
 
-        <Card className={`${getStatusColor()} border-2`}>
-          <CardHeader className="text-center pb-4">
-            <div className="flex justify-center mb-4">{getStatusIcon()}</div>
-            <CardTitle className="text-xl">
-              {status === "success" && "Email Verified!"}
-              {status === "error" && "Verification Failed"}
-              {status === "verifying" && "Verifying..."}
-              {status === "resending" && "Sending New Code..."}
-              {status === "idle" &&
-                (isUnverifiedUser
-                  ? "Verification Required"
-                  : "Enter Verification Code")}
-            </CardTitle>
-            <CardDescription>
-              {status === "success" && "Redirecting you to your dashboard..."}
-              {status === "error" && "Please check your code and try again."}
-              {status === "verifying" &&
-                "Please wait while we verify your code."}
-              {status === "resending" &&
-                "Sending a new verification code to your inbox."}
-              {status === "idle" &&
-                (isUnverifiedUser
-                  ? "Enter the 6-digit code sent to your email."
-                  : "Check your email for the verification code.")}
-            </CardDescription>
-          </CardHeader>
+          <Card className={`${getStatusColor()} border-2`}>
+            <CardHeader className="text-center pb-4">
+              <div className="flex justify-center mb-4">{getStatusIcon()}</div>
+              <CardTitle className="text-xl">
+                {status === "success" && "Email Verified!"}
+                {status === "error" && "Verification Failed"}
+                {status === "verifying" && "Verifying..."}
+                {status === "resending" && "Sending New Code..."}
+                {status === "idle" &&
+                  (isUnverifiedUser
+                    ? "Verification Required"
+                    : "Enter Verification Code")}
+              </CardTitle>
+              <CardDescription>
+                {status === "success" && "Redirecting you to your dashboard..."}
+                {status === "error" && "Please check your code and try again."}
+                {status === "verifying" &&
+                  "Please wait while we verify your code."}
+                {status === "resending" &&
+                  "Sending a new verification code to your inbox."}
+                {status === "idle" &&
+                  (isUnverifiedUser
+                    ? "Enter the 6-digit code sent to your email."
+                    : "Check your email for the verification code.")}
+              </CardDescription>
+            </CardHeader>
 
-          <CardContent className="space-y-6">
-            {email && (
-              <div className="text-center">
-                <p className="text-sm text-gray-600 mb-2">
-                  Verification sent to:
-                </p>
-                <p className="font-medium text-gray-900 bg-gray-100 px-3 py-2 rounded border text-sm break-all">
-                  {email}
-                </p>
-              </div>
-            )}
-
-            {status !== "success" && (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-gray-600 mb-3 text-center">
-                    Enter the 6-digit code:
-                  </p>
-                  <div className="flex justify-center space-x-2">
-                    {otp.map((digit, index) => (
-                      <Input
-                        key={index}
-                        ref={(el) => {
-                          inputRefs.current[index] = el;
-                        }}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) =>
-                          handleOtpChange(
-                            index,
-                            e.target.value.replace(/\D/g, "")
-                          )
-                        }
-                        onKeyDown={(e) => handleKeyDown(index, e)}
-                        onPaste={index === 0 ? handlePaste : undefined}
-                        className="w-12 h-12 text-center text-lg font-semibold border-2 focus:border-blue-500"
-                        disabled={
-                          status === "verifying" || status === "resending"
-                        }
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  className="w-full"
-                  onClick={() => handleVerifyOTP(otp.join(""))}
-                  disabled={
-                    otp.some((digit) => digit === "") || status === "verifying"
-                  }
-                >
-                  {status === "verifying" ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    "Verify Code"
-                  )}
-                </Button>
-              </div>
-            )}
-
-            {message && (
-              <Alert
-                className={
-                  status === "error"
-                    ? "border-red-200 bg-red-50"
-                    : status === "success"
-                    ? "border-green-200 bg-green-50"
-                    : isUnverifiedUser
-                    ? "border-yellow-200 bg-yellow-50"
-                    : "border-blue-200 bg-blue-50"
-                }
-              >
-                <AlertDescription>{message}</AlertDescription>
-              </Alert>
-            )}
-
-            {status !== "success" && (
-              <div className="space-y-3">
+            <CardContent className="space-y-6">
+              {email && (
                 <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-3">
-                    {"Didn't receive the code?"}
+                  <p className="text-sm text-gray-600 mb-2">
+                    Verification sent to:
                   </p>
+                  <p className="font-medium text-gray-900 bg-gray-100 px-3 py-2 rounded border text-sm break-all">
+                    {email}
+                  </p>
+                </div>
+              )}
+
+              {status !== "success" && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3 text-center">
+                      Enter the 6-digit code:
+                    </p>
+                    <div className="flex justify-center space-x-2">
+                      {otp.map((digit, index) => (
+                        <Input
+                          key={index}
+                          ref={(el) => {
+                            inputRefs.current[index] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) =>
+                            handleOtpChange(
+                              index,
+                              e.target.value.replace(/\D/g, ""),
+                            )
+                          }
+                          onKeyDown={(e) => handleKeyDown(index, e)}
+                          onPaste={index === 0 ? handlePaste : undefined}
+                          className="w-12 h-12 text-center text-lg font-semibold border-2 focus:border-blue-500"
+                          disabled={
+                            status === "verifying" || status === "resending"
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+
                   <Button
-                    variant="outline"
-                    onClick={handleResendEmail}
-                    disabled={!canResend || status === "resending"}
-                    className="w-full bg-transparent"
+                    className="w-full"
+                    onClick={() => handleVerifyOTP(otp.join(""))}
+                    disabled={
+                      otp.some((digit) => digit === "") ||
+                      status === "verifying"
+                    }
                   >
-                    {status === "resending" ? (
+                    {status === "verifying" ? (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Sending...
+                        Verifying...
                       </>
-                    ) : canResend ? (
-                      "Resend Verification Code"
                     ) : (
-                      `Resend in ${countdown}s`
+                      "Verify Code"
                     )}
                   </Button>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <div className="text-center text-xs text-gray-500 space-y-1">
-          <p>Check your spam folder if you don&apos;t see the email</p>
-          <p>The verification code expires in 10 minutes</p>
+              )}
+
+              {message && (
+                <Alert
+                  className={
+                    status === "error"
+                      ? "border-red-200 bg-red-50"
+                      : status === "success"
+                        ? "border-green-200 bg-green-50"
+                        : isUnverifiedUser
+                          ? "border-yellow-200 bg-yellow-50"
+                          : "border-blue-200 bg-blue-50"
+                  }
+                >
+                  <AlertDescription>{message}</AlertDescription>
+                </Alert>
+              )}
+
+              {status !== "success" && (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-3">
+                      {"Didn't receive the code?"}
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={handleResendEmail}
+                      disabled={!canResend || status === "resending"}
+                      className="w-full bg-transparent"
+                    >
+                      {status === "resending" ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : canResend ? (
+                        "Resend Verification Code"
+                      ) : (
+                        `Resend in ${countdown}s`
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <div className="text-center text-xs text-gray-500 space-y-1">
+            <p>Check your spam folder if you don&apos;t see the email</p>
+            <p>The verification code expires in 10 minutes</p>
+          </div>
         </div>
       </div>
-    </div>
     </>
+  );
+}
+export default function OTPVerificationPage() {
+  return (
+    <Suspense fallback={null}>
+      <OTPVerificationForm />
+    </Suspense>
   );
 }

@@ -67,7 +67,11 @@ export function TeamManagementPageClient() {
 
   const fetchTeamData = useCallback(async (showRefreshIndicator = false) => {
     try {
-      showRefreshIndicator ? setIsRefreshing(true) : setIsLoading(true);
+      if (showRefreshIndicator) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
 
       setError(null);
 
@@ -93,7 +97,11 @@ export function TeamManagementPageClient() {
   }, []);
 
   useEffect(() => {
-    fetchTeamData();
+    const loadTeamData = async () => {
+      await fetchTeamData();
+    };
+
+    loadTeamData();
   }, [fetchTeamData]);
 
   const handleMemberCreated = useCallback(() => {
@@ -155,6 +163,7 @@ export function TeamManagementPageClient() {
     }
   };
 
+  // unblock user
   const unblockUser = async (id: string) => {
     try {
       setTeamMembers((prev) =>
@@ -184,6 +193,7 @@ export function TeamManagementPageClient() {
     }
   };
 
+  // delete user
   const deleteUser = async (id: string) => {
     try {
       const memberToDelete = teamMembers.find((m) => m.id === id);

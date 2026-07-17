@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   ShieldAlert,
 } from "lucide-react";
-
+import { signOut } from "next-auth/react";
+// ── Password strength indicator ───────────────────────────────────────────────
 function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;
 
@@ -36,7 +37,7 @@ function PasswordStrength({ password }: { password: string }) {
           : 1;
 
   const labels = ["", "Weak", "Fair", "Good", "Strong"];
-  const colors = [
+  const barColors = [
     "",
     "bg-red-500",
     "bg-amber-500",
@@ -58,7 +59,7 @@ function PasswordStrength({ password }: { password: string }) {
           <div
             key={level}
             className={`h-1.5 flex-1 rounded-full transition-colors ${
-              level <= strength ? colors[strength] : "bg-gray-200"
+              level <= strength ? barColors[strength] : "bg-gray-200"
             }`}
           />
         ))}
@@ -70,10 +71,14 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
+// ── Main form ─────────────────────────────────────────────────────────────────
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const emailParam = searchParams.get("email") ?? "";
+  // forced=true means admin-created user setting their own password
+  // NO otp required — they are already logged in and verified
   const isForced = searchParams.get("forced") === "true";
 
   const [email, setEmail] = useState(emailParam);
@@ -85,22 +90,28 @@ function ResetPasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Auto-focus OTP field when email is pre-filled
   useEffect(() => {
-    if (emailParam) {
-      document.getElementById("otp-input")?.focus();
-    }
-  }, [emailParam]);
+    // Auto-focus the right field:
+    // forced → jump straight to new password
+    // standard → focus OTP field if email is pre-filled
+    const focusId = isForced
+      ? "new-password"
+      : emailParam
+        ? "otp-input"
+        : "email-input";
+    setTimeout(() => document.getElementById(focusId)?.focus(), 100);
+  }, [isForced, emailParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim()) {
-      setError("Email is required.");
+    // ── Client-side validation ───────────────────────────────────────────
+    if (!isForced && !email.trim()) {
+      setError("Email address is required.");
       return;
     }
-    if (otp.trim().length !== 6) {
+    if (!isForced && otp.trim().length !== 6) {
       setError("Enter the 6-digit code from your email.");
       return;
     }
@@ -114,12 +125,23 @@ function ResetPasswordForm() {
     }
 
     setLoading(true);
+
     try {
-      const { data } = await axios.post("/api/auth/reset-password", {
-        email: email.trim(),
-        otp: otp.trim(),
-        newPassword: newPw,
-      });
+      const payload = isForced
+        ? {
+            // Forced reset: session-based, no email/otp needed
+            forced: true,
+            newPassword: newPw,
+          }
+        : {
+            // Standard forgot-password reset: needs email + otp
+            forced: false,
+            email: email.trim(),
+            otp: otp.trim(),
+            newPassword: newPw,
+          };
+
+      const { data } = await axios.post("/api/auth/reset-password", payload);
 
       if (!data.success) {
         setError(data.message);
@@ -127,8 +149,10 @@ function ResetPasswordForm() {
       }
 
       setDone(true);
-      // Redirect to login after 2 seconds
-      setTimeout(() => router.push("/login?reset=success"), 2000);
+      await signOut({ redirect: false });
+
+      // After any reset, require a fresh login so the session is rebuilt.
+      setTimeout(() => router.push("/login?reset=success"), 1500);
     } catch (err) {
       setError(
         axios.isAxiosError(err) && err.response?.data?.message
@@ -154,42 +178,50 @@ function ResetPasswordForm() {
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
+          {/* ── Success state ────────────────────────────────────────────── */}
           {done ? (
-            /* Success state */
             <div className="text-center py-2">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
               </div>
               <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                Password reset!
+                {isForced ? "Password set!" : "Password reset!"}
               </h2>
               <p className="text-sm text-gray-500">
-                Redirecting you to login...
+                Please sign in again with your new password.
               </p>
             </div>
           ) : (
             <>
-              {/* Forced reset banner */}
+              {/* ── Forced reset banner ───────────────────────────────────── */}
               {isForced && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-5">
+                <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-lg mb-5">
                   <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-800">
-                    Your account was created by an admin. You must set your own
-                    password before continuing.
-                  </p>
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800 mb-0.5">
+                      Action required
+                    </p>
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      Your account was set up by an admin with a temporary
+                      password. Choose your own password to continue.
+                    </p>
+                  </div>
                 </div>
               )}
 
+              {/* ── Heading ───────────────────────────────────────────────── */}
               <div className="mb-6">
                 <h1 className="text-xl font-semibold text-gray-900">
                   {isForced ? "Set your password" : "Reset your password"}
                 </h1>
                 <p className="text-sm text-gray-500 mt-1">
-                  Enter the 6-digit code from your email and choose a new
-                  password.
+                  {isForced
+                    ? "Choose a strong password for your account."
+                    : "Enter the 6-digit code from your email and your new password."}
                 </p>
               </div>
 
+              {/* ── Error alert ───────────────────────────────────────────── */}
               {error && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
@@ -198,13 +230,14 @@ function ResetPasswordForm() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Email — hidden if pre-filled from params */}
-                {!emailParam && (
+                {/* ── Standard only: email (if not pre-filled) ───────────── */}
+                {!isForced && !emailParam && (
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-gray-700">
                       Email address
                     </label>
                     <Input
+                      id="email-input"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -214,35 +247,42 @@ function ResetPasswordForm() {
                   </div>
                 )}
 
-                {/* OTP */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">
-                    Reset Code
-                  </label>
-                  <Input
-                    id="otp-input"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) =>
-                      setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
-                    }
-                    placeholder="000000"
-                    className="text-center text-2xl tracking-[0.5em] font-mono h-12"
-                    autoComplete="one-time-code"
-                  />
-                </div>
+                {/* ── Standard only: OTP field ────────────────────────────── */}
+                {/* NOT shown for forced resets — user is already authenticated */}
+                {!isForced && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">
+                      Reset Code
+                    </label>
+                    <Input
+                      id="otp-input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) =>
+                        setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      placeholder="000000"
+                      className="text-center text-2xl tracking-[0.5em] font-mono h-12"
+                      autoComplete="one-time-code"
+                    />
+                    <p className="text-xs text-gray-400">
+                      Check your email for the 6-digit reset code.
+                    </p>
+                  </div>
+                )}
 
-                {/* New password */}
+                {/* ── New password ─────────────────────────────────────────── */}
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-gray-700">
-                    New Password
+                    {isForced ? "Your password" : "New Password"}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
+                      id="new-password"
                       type={showPw ? "text" : "password"}
                       value={newPw}
                       onChange={(e) => setNewPw(e.target.value)}
@@ -253,7 +293,7 @@ function ResetPasswordForm() {
                     <button
                       type="button"
                       onClick={() => setShowPw((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
                     >
                       {showPw ? (
                         <EyeOff className="w-4 h-4" />
@@ -265,7 +305,7 @@ function ResetPasswordForm() {
                   <PasswordStrength password={newPw} />
                 </div>
 
-                {/* Confirm password */}
+                {/* ── Confirm password ─────────────────────────────────────── */}
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-gray-700">
                     Confirm Password
@@ -276,7 +316,7 @@ function ResetPasswordForm() {
                       type={showPw ? "text" : "password"}
                       value={confirmPw}
                       onChange={(e) => setConfirmPw(e.target.value)}
-                      placeholder="Repeat new password"
+                      placeholder="Repeat your password"
                       className={`pl-10 ${
                         confirmPw && confirmPw !== newPw
                           ? "border-red-400 focus-visible:ring-red-400"
@@ -288,24 +328,27 @@ function ResetPasswordForm() {
                     />
                   </div>
                   {confirmPw && confirmPw !== newPw && (
-                    <p className="text-xs text-red-500">
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
                       Passwords do not match
                     </p>
                   )}
                   {confirmPw && confirmPw === newPw && (
                     <p className="text-xs text-emerald-600 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Passwords match
+                      <CheckCircle2 className="w-3 h-3" />
+                      Passwords match
                     </p>
                   )}
                 </div>
 
+                {/* ── Submit ───────────────────────────────────────────────── */}
                 <Button
                   type="submit"
                   className="w-full bg-gray-900 hover:bg-gray-700 mt-2"
                   disabled={loading}
                 >
                   {loading
-                    ? "Resetting..."
+                    ? "Saving..."
                     : isForced
                       ? "Set My Password"
                       : "Reset Password"}
@@ -315,6 +358,7 @@ function ResetPasswordForm() {
           )}
         </div>
 
+        {/* Back to login — only for standard reset, not forced */}
         {!isForced && (
           <div className="mt-6 text-center">
             <Link

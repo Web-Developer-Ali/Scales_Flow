@@ -27,19 +27,13 @@ export async function POST(req: Request) {
 
     const user = rows[0];
 
-    // Return success even if user doesn't exist (security)
-    if (!user) {
+    // Return success even if user doesn't exist or the account is inactive.
+    // This prevents email enumeration for the forgot-password flow.
+    if (!user || !user.is_active) {
       return NextResponse.json({
         success: true,
         message: "If that email exists, a reset code has been sent.",
       });
-    }
-
-    if (!user.is_active) {
-      return NextResponse.json(
-        { success: false, message: "This account has been deactivated." },
-        { status: 403 },
-      );
     }
 
     // Rate limit: don't resend if existing OTP is still valid

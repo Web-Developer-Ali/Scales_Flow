@@ -139,12 +139,11 @@ export async function proxy(req: NextRequest) {
   if (
     token.must_reset_password === true &&
     pathname !== "/reset-password" &&
-    pathname !== "/api/auth/reset-password" &&
-    !pathname.startsWith("/api/auth")
+    !pathname.startsWith("/api/auth") &&
+    !pathname.startsWith("/api/profile")
   ) {
     const resetUrl = new URL("/reset-password", req.url);
     resetUrl.searchParams.set("forced", "true");
-    resetUrl.searchParams.set("email", (token.email as string) ?? "");
     return NextResponse.redirect(resetUrl);
   }
 
