@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { sendRegistrationOtp } from "@/lib/email/otp-service";
+import { clearRegistrationOtp } from "@/lib/email/Otp-db-helpers";
 
 export async function POST(request: Request) {
   try {
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
     if (!email) {
       return NextResponse.json(
         { success: false, message: "Email is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     const { rows } = await query(
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
       WHERE LOWER(email) = LOWER($1)
       LIMIT 1
       `,
-      [email]
+      [email],
     );
 
     const user = rows[0];
@@ -32,18 +33,18 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     if (user.is_verified) {
       return NextResponse.json(
         { success: false, message: "Email already verified" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
-      // Prevent resend if OTP still valid
+    // Prevent resend if OTP still valid
     const now = new Date();
 
     if (user.email_otp && user.email_otp_expires_at) {
@@ -55,13 +56,13 @@ export async function POST(request: Request) {
             success: false,
             message: "Existing OTP is still valid. Please check your email.",
           },
-          { status: 429 }
+          { status: 429 },
         );
       }
     }
-     //  Regenerate OTP in DB (10 min for ALL roles)
-       
-     const { rows: updated } = await query(
+    //  Regenerate OTP in DB (10 min for ALL roles)
+
+    const { rows: updated } = await query(
       `
       UPDATE users
       SET
@@ -71,45 +72,49 @@ export async function POST(request: Request) {
       WHERE id = $1
       RETURNING email_otp, role
       `,
-      [user.id]
+      [user.id],
     );
 
     const otp = updated[0].email_otp;
     const role = updated[0].role;
 
     // Send OTP email
-      const verificationLink = `${process.env.NEXTAUTH_URL}/otp-verification?email=${encodeURIComponent(
-      email
+    const verificationLink = `${process.env.NEXTAUTH_URL}/otp-verification?email=${encodeURIComponent(
+      email,
     )}`;
 
     const emailResult = await sendRegistrationOtp(
       email,
       role,
       otp,
-      verificationLink
+      verificationLink,
     );
 
     if (!emailResult.success) {
+      // Delivery ultimately failed after retries/failover — clear the OTP
+      // so the rate-limit guard above doesn't block the very next attempt.
+      await clearRegistrationOtp(user.id);
+
       return NextResponse.json(
         { success: false, message: emailResult.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-         // Success
+    // Success
     return NextResponse.json(
       {
         success: true,
         message: "New OTP sent successfully. It will expire in 10 minutes.",
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("Resend OTP Error:", error);
 
     return NextResponse.json(
       { success: false, message: "Failed to resend OTP" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

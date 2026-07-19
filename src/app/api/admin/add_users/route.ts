@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { sendWelcomeEmail } from "@/lib/email/email-notifications";
+import { clearRegistrationOtp } from "@/lib/email/Otp-db-helpers";
 
 function getClientIp(req: Request): string | null {
   const forwardedFor = req.headers.get("x-forwarded-for");
@@ -76,13 +77,31 @@ export async function POST(req: Request) {
       );
     }
 
-    await sendWelcomeEmail({
+    const emailResult = await sendWelcomeEmail({
       email: email.toLowerCase().trim(),
       name: name.trim(),
       role,
       otp,
       createdByName: session.user.name ?? "Admin",
     });
+
+    if (!emailResult.success) {
+      // Delivery ultimately failed after retries/failover — clear the OTP
+      // so the new user (or the admin, via resend) isn't blocked by a
+      // rate-limit guard protecting a code that never arrived. The user
+      // record itself is left intact; they can still be verified via the
+      // resend-OTP flow once email is working again.
+      await clearRegistrationOtp(user_id);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "User was created, but we couldn't send the verification email. Use 'Resend OTP' once email delivery is confirmed working.",
+        },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({
       success: true,

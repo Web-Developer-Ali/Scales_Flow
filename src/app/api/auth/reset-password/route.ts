@@ -152,7 +152,7 @@ async function handleOtpReset(email: string, otp: string, newPassword: string) {
     return NextResponse.json(
       {
         success: false,
-        message: "Reset code has expired. Please request a new one.",
+        message: "Reset otp code has expired. Please request a new one.",
       },
       { status: 400 },
     );
@@ -162,7 +162,7 @@ async function handleOtpReset(email: string, otp: string, newPassword: string) {
     return NextResponse.json(
       {
         success: false,
-        message: "Invalid reset code. Please check and try again.",
+        message: "Invalid otp code. Please check and try again.",
       },
       { status: 400 },
     );

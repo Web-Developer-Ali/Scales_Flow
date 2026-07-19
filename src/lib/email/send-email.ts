@@ -1,34 +1,11 @@
-import { Resend } from "resend";
+// ⚠️ DEPRECATED — this file used to hardcode its own Resend client, bypassing
+// your DB/env-configured settings entirely. Anything importing from here was
+// silently ignoring admin configuration (provider choice, from-address,
+// enabled/disabled state) and had zero retry logic.
+//
+// Everything now lives in `email-provider.ts`. This file just re-exports the
+// non-critical sender so existing imports don't break immediately — please
+// update call sites to import from "./email-provider" directly and then
+// delete this file.
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const FROM_ADDRESS =
-  process.env.RESEND_FROM_EMAIL ?? "SalesFlow <notifications@yourdomain.com>";
-
-interface SendEmailParams {
-  to: string | string[];
-  subject: string;
-  html: string;
-}
-
-export async function sendEmail(params: SendEmailParams): Promise<boolean> {
-  try {
-    const { error } = await resend.emails.send({
-      from: FROM_ADDRESS,
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-    });
-
-    if (error) {
-      console.error("Resend error:", error);
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    // Email is non-critical — log but never throw
-    console.error("Failed to send email:", err);
-    return false;
-  }
-}
+export { sendEmail } from "./email-provider";

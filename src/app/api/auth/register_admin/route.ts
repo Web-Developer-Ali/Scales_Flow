@@ -4,6 +4,7 @@ import { registrationSchema } from "@/lib/validation/registrationSchema";
 import { pool } from "@/lib/db";
 import { ZodError } from "zod";
 import { sendRegistrationOtp } from "@/lib/email/otp-service";
+import { clearRegistrationOtp } from "@/lib/email/Otp-db-helpers";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hash(password, 12);
 
     // Bootstrap first admin
-    const role: "admin" = "admin";
+    const role = "admin";
     const createdBy = null;
 
     // Call DB function
@@ -39,20 +40,25 @@ export async function POST(request: NextRequest) {
         role,
         companyName || null,
         createdBy,
-      ]
+      ],
     );
 
+    // NOTE: assumes create_user_with_role returns both user_id and otp, as
+    // it does in the admin "create team member" route. If your version of
+    // this function only returns `otp`, add a `user_id` column to its
+    // RETURNS TABLE so rollback below has something to target.
+    const userId = result.rows[0]?.user_id;
     const otp = result.rows[0]?.otp;
 
     if (!otp) {
       return NextResponse.json(
         { success: false, message: "Failed to generate OTP" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     const verificationLink = `${process.env.NEXTAUTH_URL}/otp-verification?email=${encodeURIComponent(
-      email
+      email,
     )}`;
 
     // Send OTP email
@@ -60,13 +66,18 @@ export async function POST(request: NextRequest) {
       email,
       role,
       otp,
-      verificationLink
+      verificationLink,
     );
 
     if (!sendOtpEmail.success) {
+      // Delivery ultimately failed after retries/failover. Clear the OTP
+      // (if we have a user id to target) so a subsequent resend isn't
+      // blocked by a rate-limit guard protecting a code that never arrived.
+      if (userId) await clearRegistrationOtp(userId);
+
       return NextResponse.json(
         { success: false, message: sendOtpEmail.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -76,9 +87,9 @@ export async function POST(request: NextRequest) {
         success: true,
         message: "Admin registered successfully. OTP sent to email.",
       },
-      { status: 201 }
+      { status: 201 },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Admin registration error:", error);
 
     // Zod validation errors
@@ -92,29 +103,34 @@ export async function POST(request: NextRequest) {
             message: err.message,
           })),
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Unique constraint
-    if (error.code === "23505") {
+    // PostgreSQL errors
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "23505"
+    ) {
       return NextResponse.json(
         { success: false, message: "Email already exists" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
-    // Role/permission errors from DB
-    if (error.message?.includes("Only")) {
+    // Role/permission errors
+    if (error instanceof Error && error.message.includes("Only")) {
       return NextResponse.json(
         { success: false, message: error.message },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     return NextResponse.json(
       { success: false, message: "Registration failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

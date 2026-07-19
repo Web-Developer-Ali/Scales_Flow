@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { sendPasswordResetOtp } from "@/lib/email/otp-service";
+import { clearPasswordResetOtp } from "@/lib/email/Otp-db-helpers";
 
 export async function POST(req: Request) {
   try {
@@ -74,6 +75,11 @@ export async function POST(req: Request) {
     );
 
     if (!emailResult.success) {
+      // Delivery ultimately failed after retries/failover — clear the OTP
+      // so the rate-limit guard above doesn't lock the user out for 10
+      // minutes waiting on a code that never arrived.
+      await clearPasswordResetOtp(user.id);
+
       return NextResponse.json(
         { success: false, message: "Failed to send reset email. Try again." },
         { status: 500 },

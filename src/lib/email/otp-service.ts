@@ -1,4 +1,4 @@
-import { getEmailSettings, sendEmail } from "./email-provider";
+import { sendCriticalEmail } from "./email-provider";
 
 interface OtpEmailResponse {
   success: boolean;
@@ -23,17 +23,6 @@ export async function sendRegistrationOtp(
   otp: string,
   verificationLink: string,
 ): Promise<OtpEmailResponse> {
-  const settings = await getEmailSettings();
-
-  if (!settings.enabled) {
-    console.warn("[Email] OTP send skipped: email settings not configured.");
-    return {
-      success: false,
-      message:
-        "Email delivery is not configured. Please set SMTP or email provider settings.",
-    };
-  }
-
   try {
     const expiryMessage =
       role === "admin"
@@ -56,17 +45,24 @@ export async function sendRegistrationOtp(
       `,
     );
 
-    const success = await sendEmail({
+    const result = await sendCriticalEmail({
       to: toEmail,
       subject: "Email Verification OTP",
       html: emailContent,
     });
 
+    if (!result.success) {
+      console.error(
+        `[OTP] Registration OTP to ${toEmail} failed after ${result.attempts} attempt(s):`,
+        result.error,
+      );
+    }
+
     return {
-      success,
-      message: success
+      success: result.success,
+      message: result.success
         ? "OTP email sent successfully."
-        : "Failed to send OTP email. Check email provider settings.",
+        : "We couldn't send your verification email right now. Please try again in a moment.",
     };
   } catch (error) {
     console.error("Error sending OTP email:", error);
@@ -81,20 +77,7 @@ export async function sendPasswordResetOtp(
   toEmail: string,
   otp: string,
   resetLink: string,
-): Promise<{ success: boolean; message: string }> {
-  const settings = await getEmailSettings();
-
-  if (!settings.enabled) {
-    console.warn(
-      "[Email] Password reset send skipped: email settings not configured.",
-    );
-    return {
-      success: false,
-      message:
-        "Email delivery is not configured. Please set SMTP or email provider settings.",
-    };
-  }
-
+): Promise<OtpEmailResponse> {
   try {
     const emailContent = otpHtmlTemplate(
       "Reset Your Password",
@@ -119,17 +102,24 @@ export async function sendPasswordResetOtp(
       `,
     );
 
-    const success = await sendEmail({
+    const result = await sendCriticalEmail({
       to: toEmail,
       subject: "Reset Your SalesFlow Password",
       html: emailContent,
     });
 
+    if (!result.success) {
+      console.error(
+        `[OTP] Password reset OTP to ${toEmail} failed after ${result.attempts} attempt(s):`,
+        result.error,
+      );
+    }
+
     return {
-      success,
-      message: success
+      success: result.success,
+      message: result.success
         ? "Reset code sent successfully."
-        : "Failed to send reset email. Check email provider settings.",
+        : "We couldn't send your reset email right now. Please try again in a moment.",
     };
   } catch (error) {
     console.error("Error sending reset OTP email:", error);

@@ -10,7 +10,7 @@ const pool = new Pool({
 // ── Config ────────────────────────────────────────────────────────────────────
 const CONFIG = {
   managers: 5,
-  repsPerManager: 10, // 50 reps total — simulates 55-person agency
+  repsPerManager: 10, // 50 reps total — simulates 55-person agenc
   dealsPerRep: 200, // 10,000 total deals
   clientsPerRep: 40, // 2,000 total clients
   monthsOfHistory: 18, // 18 months of data

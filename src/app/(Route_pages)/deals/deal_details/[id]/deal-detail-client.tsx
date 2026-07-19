@@ -279,7 +279,7 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <h2 className="text-lg font-semibold">Deal not found</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            This deal doesn't exist or you don't have access.
+            This deal doesn&apos;t exist or you don&apos;t have access.
           </p>
           <Button className="mt-4" onClick={() => router.back()}>
             Go Back
@@ -754,9 +754,7 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
             ) : deal.client_id ? (
               /* View mode: linked — show clickable client name */
               <button
-                onClick={() =>
-                  router.push(`/scales_man/clients/${deal.client_id}`)
-                }
+                onClick={() => router.push(`/clients/${deal.client_id}`)}
                 className="w-full flex items-center gap-2 p-3 rounded-lg bg-secondary/30 border border-border hover:border-primary/30 hover:bg-secondary/50 transition-all group text-left"
               >
                 <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0 group-hover:text-primary transition-colors" />
