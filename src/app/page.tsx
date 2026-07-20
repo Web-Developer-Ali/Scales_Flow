@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Instrument_Serif } from "next/font/google";
 import {
   BarChart3,
   ArrowRight,
@@ -11,22 +12,60 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+const displaySerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["italic"],
+  variable: "--font-display-serif",
+});
+
 export const metadata = {
   title: "SalesFlow — Sales Pipeline Management",
   description:
     "A precision-built CRM for performance marketing agencies. Track deals, manage teams, and close more with clarity.",
 };
 
+const STAGES = ["Prospect", "Qualified", "Proposal", "Negotiation", "Closed"];
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden font-sans">
+      {/* Local keyframes for the pipeline-flow signature visual.
+          Kept pure-CSS so it animates with zero JS, and disabled
+          entirely under prefers-reduced-motion. */}
+      <style>{`
+        @keyframes flowMove {
+          0%   { left: 0%; transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+          8%   { opacity: 1; }
+          92%  { opacity: 1; }
+          100% { left: 100%; transform: translate(-50%, -50%) scale(1.1); opacity: 0; }
+        }
+        @keyframes flowColor {
+          0%, 55% { background-color: #d1d5db; }
+          100%    { background-color: #10b981; }
+        }
+        .flow-dot {
+          animation: flowMove var(--flow-duration) linear infinite,
+                     flowColor var(--flow-duration) linear infinite;
+          animation-delay: var(--flow-delay);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .flow-dot {
+            animation: none;
+            left: 82%;
+            opacity: 1;
+            background-color: #10b981;
+          }
+        }
+      `}</style>
+
       {/* ── NAV ─────────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 border border-gray-200 bg-white flex items-center justify-center">
-              <BarChart3 size={13} className="text-gray-900" />
+            <div className="w-7 h-7 rounded-[6px] bg-gray-900 flex items-center justify-center">
+              <BarChart3 size={13} className="text-white" />
             </div>
             <span className="font-mono text-xs font-semibold tracking-widest text-gray-900 uppercase">
               SalesFlow
@@ -56,7 +95,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/admin/dashboard"
-              className="flex items-center gap-1.5 text-xs font-medium text-white bg-gray-900 px-4 py-2 hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-white bg-gray-900 px-4 py-2 hover:bg-emerald-600 transition-colors"
             >
               Dashboard
               <ArrowRight size={11} />
@@ -67,13 +106,22 @@ export default function LandingPage() {
 
       {/* ── HERO ────────────────────────────────────────────────────── */}
       <section
-        className="relative border-b border-gray-100 px-6 py-28 md:py-36"
+        className="relative border-b border-gray-100 px-6 pt-28 pb-20 md:pt-36 md:pb-28"
         style={{
           backgroundImage:
             "linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)",
           backgroundSize: "40px 40px",
         }}
       >
+        {/* Soft radial glow — a single, deliberate touch of color behind the headline */}
+        <div
+          className="absolute inset-x-0 top-0 h-[520px] pointer-events-none"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 50% 0%, rgba(16,185,129,0.07), transparent 62%)",
+          }}
+        />
+
         {/* Corner brackets */}
         <div className="absolute top-8 left-8 w-12 h-12 border-t border-l border-gray-200 hidden md:block" />
         <div className="absolute bottom-8 right-8 w-12 h-12 border-b border-r border-gray-200 hidden md:block" />
@@ -81,7 +129,7 @@ export default function LandingPage() {
         <div className="max-w-2xl mx-auto text-center relative z-10">
           {/* Tag */}
           <div className="inline-flex items-center gap-2 text-xs font-medium tracking-widest uppercase text-gray-400 border border-gray-200 bg-white px-4 py-2 mb-7">
-            <Zap size={10} />
+            <Zap size={10} className="text-emerald-500" />
             Performance Marketing CRM
           </div>
 
@@ -89,22 +137,27 @@ export default function LandingPage() {
           <h1 className="text-5xl md:text-7xl font-light leading-none tracking-tight text-gray-900 mb-6">
             Sales clarity
             <br />
-            <span className="italic text-gray-300">for agencies that</span>
+            <span
+              className={`${displaySerif.className} text-gray-400`}
+              style={{ fontStyle: "italic" }}
+            >
+              for agencies that
+            </span>
             <br />
             move fast.
           </h1>
 
           {/* Sub */}
-          <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto mb-9">
+          <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto mb-11">
             Track every deal from first contact to closed. Built specifically
             for your agency — one team, one system, zero noise.
           </p>
 
           {/* CTAs */}
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-3 mb-20">
             <Link
               href="/admin/dashboard"
-              className="flex items-center gap-2 text-sm font-medium text-white bg-gray-900 px-6 py-3 hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-2 text-sm font-medium text-white bg-gray-900 px-6 py-3 hover:bg-emerald-600 transition-colors"
             >
               Enter Dashboard
               <ArrowRight size={13} />
@@ -115,6 +168,64 @@ export default function LandingPage() {
             >
               Sign in
             </Link>
+          </div>
+
+          {/* ── Signature visual: deals flowing through the pipeline ──── */}
+          <div className="bg-white border border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.03)] px-8 pt-10 pb-7 text-left">
+            <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-300 mb-8">
+              Live pipeline · 5 stages
+            </p>
+
+            <div className="relative h-8 mb-3">
+              <div className="absolute top-1/2 left-0 right-0 h-px bg-gray-150 bg-gray-200" />
+              {/* Stage ticks */}
+              {STAGES.map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-gray-300"
+                  style={{ left: `${(i / (STAGES.length - 1)) * 100}%` }}
+                />
+              ))}
+              {/* Animated deal dots */}
+              <div
+                className="flow-dot absolute top-1/2 w-2.5 h-2.5 rounded-full"
+                style={
+                  {
+                    "--flow-duration": "7s",
+                    "--flow-delay": "0s",
+                  } as React.CSSProperties
+                }
+              />
+              <div
+                className="flow-dot absolute top-1/2 w-2.5 h-2.5 rounded-full"
+                style={
+                  {
+                    "--flow-duration": "9s",
+                    "--flow-delay": "2.4s",
+                  } as React.CSSProperties
+                }
+              />
+              <div
+                className="flow-dot absolute top-1/2 w-2.5 h-2.5 rounded-full"
+                style={
+                  {
+                    "--flow-duration": "8s",
+                    "--flow-delay": "5s",
+                  } as React.CSSProperties
+                }
+              />
+            </div>
+
+            <div className="flex justify-between">
+              {STAGES.map((stage) => (
+                <span
+                  key={stage}
+                  className="text-[10px] font-mono tracking-wide uppercase text-gray-400"
+                >
+                  {stage}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -155,7 +266,7 @@ export default function LandingPage() {
               Capabilities
             </p>
             <h2 className="text-3xl font-light text-gray-900 tracking-tight leading-snug max-w-xs">
-              Everything your team needs. Nothing they don't.
+              Everything your team needs. Nothing they don&apos;t.
             </h2>
           </div>
 
@@ -194,10 +305,13 @@ export default function LandingPage() {
             ].map(({ icon: Icon, title, desc }, i) => (
               <div
                 key={i}
-                className="group bg-white p-7 relative overflow-hidden hover:shadow-sm transition-shadow"
+                className="group bg-white p-7 relative overflow-hidden hover:-translate-y-0.5 hover:shadow-[0_4px_16px_rgba(0,0,0,0.05)] transition-all duration-300"
               >
-                <div className="absolute left-0 top-0 w-0.5 h-0 bg-gray-900 group-hover:h-full transition-all duration-300" />
-                <Icon size={17} className="text-gray-200 mb-5" />
+                <div className="absolute left-0 top-0 w-0.5 h-0 bg-emerald-500 group-hover:h-full transition-all duration-300" />
+                <Icon
+                  size={17}
+                  className="text-gray-200 group-hover:text-emerald-500 mb-5 transition-colors duration-300"
+                />
                 <h3 className="text-sm font-medium text-gray-900 mb-2 tracking-tight">
                   {title}
                 </h3>
@@ -246,7 +360,7 @@ export default function LandingPage() {
               },
               {
                 role: "Manager",
-                dotColor: "bg-gray-400",
+                dotColor: "bg-emerald-500",
                 perms: [
                   "Team performance view",
                   "Their reps' deals only",
@@ -256,7 +370,7 @@ export default function LandingPage() {
               },
               {
                 role: "Sales Rep",
-                dotColor: "bg-gray-200",
+                dotColor: "bg-gray-300",
                 perms: [
                   "Own deals only",
                   "Add & edit deals",
@@ -267,7 +381,7 @@ export default function LandingPage() {
             ].map((r) => (
               <div
                 key={r.role}
-                className="border border-gray-100 bg-gray-50 p-5 hover:border-gray-200 transition-colors"
+                className="border border-gray-100 bg-gray-50 p-5 hover:border-gray-200 hover:bg-white transition-colors"
               >
                 <div className="flex items-center gap-2 mb-3">
                   <div className={`w-2 h-2 rounded-full ${r.dotColor}`} />
@@ -327,7 +441,7 @@ export default function LandingPage() {
                 {col.map((item) => (
                   <div
                     key={item.label}
-                    className="flex items-center justify-between py-5 border-b border-gray-50 last:border-b-0"
+                    className="group flex items-center justify-between py-5 border-b border-gray-50 last:border-b-0"
                   >
                     <div>
                       <div className="text-sm text-gray-900 font-medium">
@@ -337,7 +451,10 @@ export default function LandingPage() {
                         {item.note}
                       </div>
                     </div>
-                    <ChevronRight size={13} className="text-gray-200" />
+                    <ChevronRight
+                      size={13}
+                      className="text-gray-200 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all"
+                    />
                   </div>
                 ))}
               </div>
@@ -347,22 +464,36 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ─────────────────────────────────────────────────────── */}
-      <section className="bg-white px-6 py-32 border-b border-gray-100 text-center">
-        <p className="text-xs font-semibold tracking-widest uppercase text-gray-300 mb-6">
-          Ready to start
-        </p>
-        <h2 className="text-4xl md:text-6xl font-light text-gray-900 tracking-tight mb-10 leading-none">
-          Your pipeline
-          <br />
-          <span className="italic text-gray-300">is waiting.</span>
-        </h2>
-        <Link
-          href="/admin/dashboard"
-          className="inline-flex items-center gap-2 text-sm font-medium text-white bg-gray-900 px-8 py-3.5 hover:bg-gray-700 transition-colors"
-        >
-          Access Dashboard
-          <ArrowRight size={13} />
-        </Link>
+      <section className="relative bg-white px-6 py-32 border-b border-gray-100 text-center overflow-hidden">
+        <div
+          className="absolute inset-x-0 bottom-0 h-72 pointer-events-none"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 50% 100%, rgba(16,185,129,0.06), transparent 65%)",
+          }}
+        />
+        <div className="relative z-10">
+          <p className="text-xs font-semibold tracking-widest uppercase text-gray-300 mb-6">
+            Ready to start
+          </p>
+          <h2 className="text-4xl md:text-6xl font-light text-gray-900 tracking-tight mb-10 leading-none">
+            Your pipeline
+            <br />
+            <span
+              className={`${displaySerif.className} text-gray-400`}
+              style={{ fontStyle: "italic" }}
+            >
+              is waiting.
+            </span>
+          </h2>
+          <Link
+            href="/admin/dashboard"
+            className="inline-flex items-center gap-2 text-sm font-medium text-white bg-gray-900 px-8 py-3.5 hover:bg-emerald-600 transition-colors"
+          >
+            Access Dashboard
+            <ArrowRight size={13} />
+          </Link>
+        </div>
       </section>
 
       {/* ── FOOTER ──────────────────────────────────────────────────── */}
@@ -371,8 +502,8 @@ export default function LandingPage() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 border border-gray-200 flex items-center justify-center">
-                <BarChart3 size={11} className="text-gray-400" />
+              <div className="w-6 h-6 rounded-[5px] bg-gray-900 flex items-center justify-center">
+                <BarChart3 size={11} className="text-white" />
               </div>
               <span className="font-mono text-xs tracking-widest text-gray-400 uppercase">
                 SalesFlow
