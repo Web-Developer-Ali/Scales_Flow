@@ -39,3 +39,4 @@ src/app/api/development_phase_api's
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+scripts/
