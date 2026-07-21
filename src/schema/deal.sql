@@ -1,3 +1,7 @@
+-- ============================================================
+-- DEALS TABLE - Multi-tenant
+-- ============================================================
+
 -- ENUM DEFINITIONS
 DO $$ BEGIN
     CREATE TYPE deal_stage AS ENUM ('prospect', 'qualified', 'demo', 'negotiation', 'closed');
@@ -12,6 +16,9 @@ END $$;
 -- DEALS TABLE
 CREATE TABLE IF NOT EXISTS deals (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Multi-tenant
+    organization_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 
     title               VARCHAR(255)  NOT NULL,
     company             VARCHAR(255)  NOT NULL,
@@ -30,7 +37,7 @@ CREATE TABLE IF NOT EXISTS deals (
 
     expected_close_date DATE,
 
-    -- Client link (Phase 3D)
+    -- Client link
     client_id           UUID          REFERENCES clients(id) ON DELETE SET NULL,
 
     assigned_to         UUID          REFERENCES users(id) ON DELETE SET NULL,
@@ -49,7 +56,6 @@ CREATE TABLE IF NOT EXISTS deals (
 
 -- ── Triggers ─────────────────────────────────────────────────────────────────
 
--- Trigger: keep updated_at fresh
 CREATE OR REPLACE FUNCTION update_deal_timestamp()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -63,10 +69,6 @@ CREATE TRIGGER trg_update_deal_timestamp
 BEFORE UPDATE ON deals
 FOR EACH ROW EXECUTE FUNCTION update_deal_timestamp();
 
--- Trigger: set generated_month from created_at on INSERT
--- generated_month is always derived from created_at
--- We use a trigger (not GENERATED ALWAYS AS) because
--- date_trunc() is not marked IMMUTABLE in PostgreSQL
 CREATE OR REPLACE FUNCTION set_generated_month()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -81,38 +83,39 @@ BEFORE INSERT ON deals
 FOR EACH ROW EXECUTE FUNCTION set_generated_month();
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
+-- All indexes include organization_id as leading column for multi-tenant queries
 
--- Dashboard queries 1 & 2: SUM(value) WHERE generated_month + status
--- INCLUDE avoids heap fetch for covering queries
-CREATE INDEX IF NOT EXISTS idx_deals_month_status_value
-    ON deals (generated_month, status)
+DROP INDEX IF EXISTS idx_deals_month_status_value;
+DROP INDEX IF EXISTS idx_deals_won_close_time;
+DROP INDEX IF EXISTS idx_deals_month_stage;
+DROP INDEX IF EXISTS idx_deals_month_assigned_won;
+DROP INDEX IF EXISTS idx_deals_month_created_desc;
+DROP INDEX IF EXISTS idx_deals_client_id;
+DROP INDEX IF EXISTS idx_deals_assigned_status;
+
+CREATE INDEX IF NOT EXISTS idx_deals_org_month_status_value
+    ON deals (organization_id, generated_month, status)
     INCLUDE (value);
 
--- Dashboard query 4: AVG close time for won deals (partial index)
-CREATE INDEX IF NOT EXISTS idx_deals_won_close_time
-    ON deals (generated_month, created_at, updated_at)
+CREATE INDEX IF NOT EXISTS idx_deals_org_won_close_time
+    ON deals (organization_id, generated_month, created_at, updated_at)
     WHERE status = 'won';
 
--- Dashboard query 5: GROUP BY stage WHERE generated_month
-CREATE INDEX IF NOT EXISTS idx_deals_month_stage
-    ON deals (generated_month, stage);
+CREATE INDEX IF NOT EXISTS idx_deals_org_month_stage
+    ON deals (organization_id, generated_month, stage);
 
--- Dashboard query 6: team performance — join on assigned_to, filter won
-CREATE INDEX IF NOT EXISTS idx_deals_month_assigned_won
-    ON deals (generated_month, assigned_to)
+CREATE INDEX IF NOT EXISTS idx_deals_org_month_assigned_won
+    ON deals (organization_id, generated_month, assigned_to)
     INCLUDE (value)
     WHERE status = 'won';
 
--- Dashboard query 7: recent deals ordered by created_at DESC
-CREATE INDEX IF NOT EXISTS idx_deals_month_created_desc
-    ON deals (generated_month, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deals_org_month_created_desc
+    ON deals (organization_id, generated_month, created_at DESC);
 
--- Client detail page: all deals for a client
-CREATE INDEX IF NOT EXISTS idx_deals_client_id
-    ON deals (client_id)
+CREATE INDEX IF NOT EXISTS idx_deals_org_client_id
+    ON deals (organization_id, client_id)
     WHERE client_id IS NOT NULL;
 
--- Reports API: all-time rep performance aggregation
-CREATE INDEX IF NOT EXISTS idx_deals_assigned_status
-    ON deals (assigned_to, status)
+CREATE INDEX IF NOT EXISTS idx_deals_org_assigned_status
+    ON deals (organization_id, assigned_to, status)
     INCLUDE (value);
