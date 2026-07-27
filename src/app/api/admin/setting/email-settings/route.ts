@@ -12,7 +12,10 @@ export async function GET() {
   }
 
   try {
-    const { rows } = await query(`SELECT * FROM email_settings LIMIT 1`);
+    const { rows } = await query(
+      `SELECT * FROM email_settings WHERE organization_id = $1 LIMIT 1`,
+      [session.user.organizationId],
+    );
     const settings = rows[0] ?? null;
 
     // Never return smtp_password or resend_api_key to the client
@@ -47,6 +50,13 @@ export async function PATCH(req: Request) {
 
   try {
     const body = await req.json();
+
+    if (!session.user.organizationId) {
+      return NextResponse.json(
+        { success: false, error: "Organization context missing" },
+        { status: 400 },
+      );
+    }
 
     const {
       enabled,
@@ -115,21 +125,31 @@ export async function PATCH(req: Request) {
 
     updates.push(`updated_at = NOW()`, `updated_by = $${idx}`);
     values.push(session.user.id);
+    idx++;
 
-    // Guarantee the singleton row exists before updating it.
-    // Table is empty unless the seed insert has run for this env — this
-    // makes the endpoint self-healing instead of silently no-op'ing.
-    await query(
-      `INSERT INTO email_settings (enabled, provider)
-       VALUES (FALSE, 'nodemailer')
-       ON CONFLICT ((TRUE)) DO NOTHING`,
+    const existingRow = await query(
+      `SELECT id FROM email_settings WHERE organization_id = $1 LIMIT 1`,
+      [session.user.organizationId],
     );
+
+    if (existingRow.rows.length === 0) {
+      const insertValues = [session.user.organizationId, false, "nodemailer"];
+
+      await query(
+        `INSERT INTO email_settings (
+          organization_id,
+          enabled,
+          provider
+        ) VALUES ($1, $2, $3)`,
+        insertValues,
+      );
+    }
 
     const result = await query(
       `UPDATE email_settings
        SET ${updates.join(", ")}
-       WHERE id = (SELECT id FROM email_settings LIMIT 1)`,
-      values,
+       WHERE organization_id = $${idx}`,
+      [...values, session.user.organizationId],
     );
 
     if (result.rowCount === 0) {

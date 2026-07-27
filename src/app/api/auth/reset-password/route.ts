@@ -4,6 +4,29 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import bcrypt from "bcryptjs";
 
+async function logPasswordActivity({
+  organizationId,
+  userId,
+  performedBy,
+  description,
+}: {
+  organizationId: string;
+  userId: string;
+  performedBy: string;
+  description: string;
+}) {
+  try {
+    await query(
+      `INSERT INTO user_activities
+         (organization_id, user_id, performed_by, activity_type, description)
+       VALUES ($1, $2, $3, 'password_change', $4)`,
+      [organizationId, userId, performedBy, description],
+    );
+  } catch (error) {
+    console.warn("Failed to write password activity log:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -59,7 +82,7 @@ async function handleForcedReset(newPassword: string) {
   // Verify this user actually has a forced reset pending
   // Prevents any logged-in user from hitting this endpoint
   const { rows } = await query(
-    `SELECT id, must_reset_password FROM users WHERE id = $1`,
+    `SELECT id, organization_id, must_reset_password FROM users WHERE id = $1`,
     [session.user.id],
   );
 
@@ -92,12 +115,12 @@ async function handleForcedReset(newPassword: string) {
     [password_hash, session.user.id],
   );
 
-  await query(
-    `INSERT INTO user_activities
-       (user_id, performed_by, activity_type, description)
-     VALUES ($1, $1, 'password_change', 'Set own password after admin-created account')`,
-    [session.user.id],
-  );
+  await logPasswordActivity({
+    organizationId: rows[0].organization_id,
+    userId: session.user.id,
+    performedBy: session.user.id,
+    description: "Set own password after admin-created account",
+  });
 
   return NextResponse.json({
     success: true,
@@ -109,7 +132,7 @@ async function handleForcedReset(newPassword: string) {
 async function handleOtpReset(email: string, otp: string, newPassword: string) {
   const { rows } = await query(
     `SELECT
-       id, is_active,
+       id, organization_id, is_active,
        reset_password_otp,
        reset_password_otp_expires_at
      FROM users
@@ -182,12 +205,12 @@ async function handleOtpReset(email: string, otp: string, newPassword: string) {
     [password_hash, user.id],
   );
 
-  await query(
-    `INSERT INTO user_activities
-       (user_id, performed_by, activity_type, description)
-     VALUES ($1, $1, 'password_change', 'Password reset via forgot-password OTP')`,
-    [user.id],
-  );
+  await logPasswordActivity({
+    organizationId: user.organization_id,
+    userId: user.id,
+    performedBy: user.id,
+    description: "Password reset via forgot-password OTP",
+  });
 
   return NextResponse.json({
     success: true,

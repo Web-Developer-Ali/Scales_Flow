@@ -3,7 +3,8 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 
-async function logActivity(params: {
+export async function logActivity(params: {
+  organizationId: string; // ← new required field
   userId: string;
   performedBy: string;
   activityType: string;
@@ -14,6 +15,7 @@ async function logActivity(params: {
 }) {
   try {
     const {
+      organizationId,
       userId,
       performedBy,
       activityType,
@@ -31,9 +33,11 @@ async function logActivity(params: {
 
     await query(
       `INSERT INTO user_activities
-        (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        (organization_id, user_id, performed_by, activity_type,
+         description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
+        organizationId,
         userId,
         performedBy,
         activityType,
@@ -45,7 +49,6 @@ async function logActivity(params: {
       ],
     );
   } catch (err) {
-    // Never let logging failures break the main request
     console.error("Activity Log Error:", err);
   }
 }
@@ -58,24 +61,23 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
     const sql = `
       WITH managers AS (
         SELECT id, name, email
         FROM users
-        WHERE role = 'manager'
+        WHERE organization_id = $1        -- ← org scope
+          AND role = 'manager'
           AND is_active = true
         ORDER BY name ASC
       ),
       reps AS (
-        SELECT
-          id,
-          name,
-          email,
-          manager_id,
-          is_active
+        SELECT id, name, email, manager_id, is_active
         FROM users
-        WHERE role = 'scales_man'
+        WHERE organization_id = $1        -- ← org scope
+          AND role = 'scales_man'
         ORDER BY name ASC
       )
       SELECT
@@ -83,7 +85,7 @@ export async function GET() {
         (SELECT COALESCE(json_agg(r), '[]'::json) FROM reps r)     AS reps;
     `;
 
-    const { rows } = await query(sql);
+    const { rows } = await query(sql, [organizationId]);
     const row = rows[0];
 
     return NextResponse.json({
@@ -108,10 +110,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
-    const body = await req.json();
-    const { repId, managerId } = body;
-    // managerId can be null → unassign
+    const { repId, managerId } = await req.json();
 
     if (!repId) {
       return NextResponse.json(
@@ -120,10 +122,11 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Validate rep exists and is scales_man
+    // Validate rep belongs to THIS org and is a sales rep
     const { rows: repRows } = await query(
-      `SELECT id, role FROM users WHERE id = $1`,
-      [repId],
+      `SELECT id, role FROM users
+       WHERE id = $1 AND organization_id = $2`,
+      [repId, organizationId],
     );
 
     if (!repRows.length || repRows[0].role !== "scales_man") {
@@ -133,12 +136,13 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // If managerId provided, validate manager exists
     let managerName: string | null = null;
     if (managerId) {
+      // Validate manager belongs to THIS org
       const { rows: mgrRows } = await query(
-        `SELECT id, role, name FROM users WHERE id = $1`,
-        [managerId],
+        `SELECT id, role, name FROM users
+         WHERE id = $1 AND organization_id = $2`,
+        [managerId, organizationId],
       );
 
       if (!mgrRows.length || mgrRows[0].role !== "manager") {
@@ -150,17 +154,16 @@ export async function PATCH(req: Request) {
       managerName = mgrRows[0].name;
     }
 
-    // Update manager_id
     const { rows: updated } = await query(
       `UPDATE users
        SET manager_id = $1, updated_at = NOW()
-       WHERE id = $2
+       WHERE id = $2 AND organization_id = $3
        RETURNING id, name, email, manager_id`,
-      [managerId ?? null, repId],
+      [managerId ?? null, repId, organizationId],
     );
 
-    // Log activity (does not block/fail the response)
     await logActivity({
+      organizationId,
       userId: repId,
       performedBy: session.user.id,
       activityType: "team_assigned",

@@ -11,23 +11,28 @@ export async function GET() {
   }
 
   const managerId = session.user.id;
+  const organizationId = session.user.organizationId;
 
   try {
+    // $1 = managerId   $2 = organizationId
     const sql = `
       WITH
       -- All reps under this manager + the manager themselves
+      -- Both scoped to the same org
       my_team AS (
         SELECT id, name, role
         FROM users
-        WHERE manager_id = $1
-          AND role       = 'scales_man'
-          AND is_active  = true
+        WHERE organization_id = $2
+          AND manager_id      = $1
+          AND role            = 'scales_man'
+          AND is_active       = true
 
         UNION ALL
 
         SELECT id, name, role
         FROM users
-        WHERE id = $1
+        WHERE id              = $1
+          AND organization_id = $2
       ),
 
       -- 1. Revenue by month — last 12 months (team only)
@@ -41,7 +46,8 @@ export async function GET() {
           COUNT(*) FILTER (WHERE status = 'won')                    AS won_deals,
           COUNT(*) FILTER (WHERE status = 'lost')                   AS lost_deals
         FROM deals
-        WHERE assigned_to IN (SELECT id FROM my_team)
+        WHERE organization_id = $2
+          AND assigned_to IN (SELECT id FROM my_team)
           AND generated_month >= (DATE_TRUNC('month', NOW()) - INTERVAL '11 months')::date
           AND generated_month <= DATE_TRUNC('month', NOW())::date
         GROUP BY generated_month
@@ -54,19 +60,17 @@ export async function GET() {
           u.id,
           u.name,
           u.role,
-          COUNT(d.id)                                                 AS total_deals,
-          COUNT(d.id) FILTER (WHERE d.status = 'won')                AS won_deals,
-          COUNT(d.id) FILTER (WHERE d.status = 'lost')               AS lost_deals,
-          COUNT(d.id) FILTER (WHERE d.status = 'active')             AS active_deals,
-          COALESCE(SUM(d.value) FILTER (WHERE d.status = 'won'),  0) AS total_revenue,
+          COUNT(d.id)                                                  AS total_deals,
+          COUNT(d.id) FILTER (WHERE d.status = 'won')                 AS won_deals,
+          COUNT(d.id) FILTER (WHERE d.status = 'lost')                AS lost_deals,
+          COUNT(d.id) FILTER (WHERE d.status = 'active')              AS active_deals,
+          COALESCE(SUM(d.value) FILTER (WHERE d.status = 'won'),   0) AS total_revenue,
           COALESCE(SUM(d.value) FILTER (WHERE d.status = 'active'),0) AS pipeline_value,
-          -- Avg close time: days from created to won
           ROUND(
             AVG(
               EXTRACT(EPOCH FROM (d.updated_at - d.created_at)) / 86400.0
             ) FILTER (WHERE d.status = 'won')
-          )                                                           AS avg_close_days,
-          -- Win rate: won / (won + lost)
+          )                                                            AS avg_close_days,
           CASE
             WHEN COUNT(d.id) FILTER (WHERE d.status IN ('won','lost')) > 0
             THEN ROUND(
@@ -74,9 +78,11 @@ export async function GET() {
               COUNT(d.id) FILTER (WHERE d.status IN ('won','lost'))
             )
             ELSE 0
-          END                                                         AS win_rate
+          END                                                          AS win_rate
         FROM my_team u
-        LEFT JOIN deals d ON d.assigned_to = u.id
+        LEFT JOIN deals d
+          ON  d.assigned_to     = u.id
+          AND d.organization_id = $2
         GROUP BY u.id, u.name, u.role
         ORDER BY total_revenue DESC
       ),
@@ -90,7 +96,8 @@ export async function GET() {
           COUNT(*) FILTER (WHERE status = 'active') AS active,
           COUNT(*) FILTER (WHERE status = 'lost')   AS lost
         FROM deals
-        WHERE assigned_to IN (SELECT id FROM my_team)
+        WHERE organization_id = $2
+          AND assigned_to IN (SELECT id FROM my_team)
         GROUP BY stage
         ORDER BY
           CASE stage::text
@@ -128,7 +135,8 @@ export async function GET() {
             ELSE 0
           END                                                        AS overall_win_rate
         FROM deals
-        WHERE assigned_to IN (SELECT id FROM my_team)
+        WHERE organization_id = $2
+          AND assigned_to IN (SELECT id FROM my_team)
       ),
 
       -- 5. Pipeline health by stage (active deals, team only)
@@ -141,7 +149,8 @@ export async function GET() {
             EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400.0
           ))                                       AS avg_days_in_stage
         FROM deals
-        WHERE status      = 'active'
+        WHERE organization_id = $2
+          AND status          = 'active'
           AND assigned_to IN (SELECT id FROM my_team)
         GROUP BY stage
         ORDER BY
@@ -162,7 +171,8 @@ export async function GET() {
           COUNT(*) FILTER (WHERE status = 'won')                   AS won_count,
           COUNT(*)                                                  AS total_count
         FROM deals
-        WHERE assigned_to   IN (SELECT id FROM my_team)
+        WHERE organization_id = $2
+          AND assigned_to IN (SELECT id FROM my_team)
           AND generated_month = DATE_TRUNC('month', NOW())::date
       ),
 
@@ -172,7 +182,8 @@ export async function GET() {
           COALESCE(SUM(value) FILTER (WHERE status = 'active'), 0) AS pipeline,
           COUNT(*) FILTER (WHERE status = 'won')                   AS won_count
         FROM deals
-        WHERE assigned_to   IN (SELECT id FROM my_team)
+        WHERE organization_id = $2
+          AND assigned_to IN (SELECT id FROM my_team)
           AND generated_month = (DATE_TRUNC('month', NOW()) - INTERVAL '1 month')::date
       ),
 
@@ -189,9 +200,10 @@ export async function GET() {
           COUNT(d.id) AS won_this_month
         FROM my_team u
         INNER JOIN deals d
-          ON d.assigned_to     = u.id
-         AND d.status          = 'won'
-         AND d.generated_month = DATE_TRUNC('month', NOW())::date
+          ON  d.assigned_to     = u.id
+          AND d.organization_id = $2
+          AND d.status          = 'won'
+          AND d.generated_month = DATE_TRUNC('month', NOW())::date
         GROUP BY u.id, u.name
         HAVING COUNT(d.id) > 0
         ORDER BY avg_close_days ASC
@@ -199,18 +211,18 @@ export async function GET() {
       )
 
       SELECT
-        (SELECT row_to_json(s)  FROM summary s)                                        AS summary,
-        (SELECT row_to_json(tm) FROM this_month tm)                                    AS this_month,
-        (SELECT row_to_json(lm) FROM last_month lm)                                    AS last_month,
-        (SELECT COALESCE(json_agg(r), '[]'::json) FROM monthly_revenue r)              AS monthly_revenue,
-        (SELECT COALESCE(json_agg(rc), '[]'::json) FROM rep_comparison rc)             AS rep_comparison,
-        (SELECT COALESCE(json_agg(f),  '[]'::json) FROM funnel f)                      AS funnel,
-        (SELECT COALESCE(json_agg(ph), '[]'::json) FROM pipeline_health ph)            AS pipeline_health,
-        (SELECT COALESCE(json_agg(fc), '[]'::json) FROM fastest_closers fc)            AS fastest_closers,
-        (SELECT COUNT(*) FROM my_team)                                                 AS team_size;
+        (SELECT row_to_json(s)  FROM summary s)                                AS summary,
+        (SELECT row_to_json(tm) FROM this_month tm)                            AS this_month,
+        (SELECT row_to_json(lm) FROM last_month lm)                            AS last_month,
+        (SELECT COALESCE(json_agg(r),  '[]'::json) FROM monthly_revenue r)    AS monthly_revenue,
+        (SELECT COALESCE(json_agg(rc), '[]'::json) FROM rep_comparison rc)    AS rep_comparison,
+        (SELECT COALESCE(json_agg(f),  '[]'::json) FROM funnel f)             AS funnel,
+        (SELECT COALESCE(json_agg(ph), '[]'::json) FROM pipeline_health ph)   AS pipeline_health,
+        (SELECT COALESCE(json_agg(fc), '[]'::json) FROM fastest_closers fc)   AS fastest_closers,
+        (SELECT COUNT(*) FROM my_team)                                         AS team_size;
     `;
 
-    const { rows } = await query(sql, [managerId]);
+    const { rows } = await query(sql, [managerId, organizationId]);
     const row = rows[0];
 
     return NextResponse.json({

@@ -11,11 +11,12 @@ export async function GET() {
   }
 
   const repId = session.user.id;
+  const organizationId = session.user.organizationId;
 
   try {
+    // $1 = repId   $2 = organizationId
     const sql = `
       WITH
-      -- Last 6 months of performance, including current month
       monthly_performance AS (
         SELECT
           TO_CHAR(generated_month, 'Mon YY')                        AS month_label,
@@ -41,30 +42,30 @@ export async function GET() {
             ELSE 0
           END                                                        AS win_rate
         FROM deals
-        WHERE assigned_to       = $1
-          AND generated_month  >= (DATE_TRUNC('month', NOW()) - INTERVAL '5 months')::date
-          AND generated_month  <= DATE_TRUNC('month', NOW())::date
+        WHERE organization_id = $2
+          AND assigned_to     = $1
+          AND generated_month >= (DATE_TRUNC('month', NOW()) - INTERVAL '5 months')::date
+          AND generated_month <= DATE_TRUNC('month', NOW())::date
         GROUP BY generated_month
         ORDER BY generated_month ASC
       ),
 
-      -- All-time summary
       all_time AS (
         SELECT
-          COUNT(*)                                                  AS total_deals,
-          COUNT(*) FILTER (WHERE status = 'won')                   AS total_won,
-          COUNT(*) FILTER (WHERE status = 'lost')                  AS total_lost,
-          COUNT(*) FILTER (WHERE status = 'active')                AS total_active,
-          COALESCE(SUM(value) FILTER (WHERE status = 'won'),    0) AS total_revenue,
-          COALESCE(SUM(value) FILTER (WHERE status = 'active'), 0) AS total_pipeline,
-          COALESCE(AVG(value) FILTER (WHERE status = 'won'),    0) AS avg_deal_size,
+          COUNT(*)                                                   AS total_deals,
+          COUNT(*) FILTER (WHERE status = 'won')                    AS total_won,
+          COUNT(*) FILTER (WHERE status = 'lost')                   AS total_lost,
+          COUNT(*) FILTER (WHERE status = 'active')                 AS total_active,
+          COALESCE(SUM(value) FILTER (WHERE status = 'won'),    0)  AS total_revenue,
+          COALESCE(SUM(value) FILTER (WHERE status = 'active'), 0)  AS total_pipeline,
+          COALESCE(AVG(value) FILTER (WHERE status = 'won'),    0)  AS avg_deal_size,
           ROUND(
             COALESCE(
               AVG(
                 EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400.0
               ) FILTER (WHERE status = 'won'), 0
             )
-          )                                                         AS avg_close_days,
+          )                                                          AS avg_close_days,
           CASE
             WHEN COUNT(*) FILTER (WHERE status IN ('won','lost')) > 0
             THEN ROUND(
@@ -72,31 +73,32 @@ export async function GET() {
               COUNT(*) FILTER (WHERE status IN ('won','lost'))
             )
             ELSE 0
-          END                                                       AS win_rate
+          END                                                        AS win_rate
         FROM deals
-        WHERE assigned_to = $1
+        WHERE organization_id = $2
+          AND assigned_to     = $1
       ),
 
-      -- Current month: closed vs total created (real target, not hardcoded)
       this_month AS (
         SELECT
-          COUNT(*)                                AS total_created,
-          COUNT(*) FILTER (WHERE status = 'won')  AS total_won,
-          COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0) AS revenue
+          COUNT(*)                                                   AS total_created,
+          COUNT(*) FILTER (WHERE status = 'won')                    AS total_won,
+          COALESCE(SUM(value) FILTER (WHERE status = 'won'), 0)     AS revenue
         FROM deals
-        WHERE assigned_to       = $1
-          AND generated_month   = DATE_TRUNC('month', NOW())::date
+        WHERE organization_id = $2
+          AND assigned_to     = $1
+          AND generated_month = DATE_TRUNC('month', NOW())::date
       ),
 
-      -- Stage breakdown for current active deals
       stage_breakdown AS (
         SELECT
-          stage::text AS stage,
-          COUNT(*)    AS count,
+          stage::text             AS stage,
+          COUNT(*)                AS count,
           COALESCE(SUM(value), 0) AS stage_value
         FROM deals
-        WHERE assigned_to = $1
-          AND status      = 'active'
+        WHERE organization_id = $2
+          AND assigned_to     = $1
+          AND status          = 'active'
         GROUP BY stage
         ORDER BY
           CASE stage::text
@@ -108,13 +110,13 @@ export async function GET() {
           END
       ),
 
-      -- Best month (highest revenue, all time)
       best_month AS (
         SELECT
-          TO_CHAR(generated_month, 'Mon YYYY') AS month_label,
-          SUM(value) FILTER (WHERE status = 'won') AS revenue
+          TO_CHAR(generated_month, 'Mon YYYY')             AS month_label,
+          SUM(value) FILTER (WHERE status = 'won')         AS revenue
         FROM deals
-        WHERE assigned_to = $1
+        WHERE organization_id = $2
+          AND assigned_to     = $1
         GROUP BY generated_month
         HAVING SUM(value) FILTER (WHERE status = 'won') > 0
         ORDER BY revenue DESC
@@ -122,14 +124,14 @@ export async function GET() {
       )
 
       SELECT
-        (SELECT row_to_json(a)  FROM all_time a)                                AS all_time,
-        (SELECT row_to_json(tm) FROM this_month tm)                             AS this_month,
-        (SELECT row_to_json(bm) FROM best_month bm)                             AS best_month,
-        (SELECT COALESCE(json_agg(m), '[]'::json) FROM monthly_performance m)   AS monthly_performance,
-        (SELECT COALESCE(json_agg(s), '[]'::json) FROM stage_breakdown s)       AS stage_breakdown;
+        (SELECT row_to_json(a)  FROM all_time a)                               AS all_time,
+        (SELECT row_to_json(tm) FROM this_month tm)                            AS this_month,
+        (SELECT row_to_json(bm) FROM best_month bm)                            AS best_month,
+        (SELECT COALESCE(json_agg(m), '[]'::json) FROM monthly_performance m)  AS monthly_performance,
+        (SELECT COALESCE(json_agg(s), '[]'::json) FROM stage_breakdown s)      AS stage_breakdown;
     `;
 
-    const { rows } = await query(sql, [repId]);
+    const { rows } = await query(sql, [repId, organizationId]);
     const row = rows[0];
 
     return NextResponse.json({

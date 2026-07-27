@@ -18,89 +18,89 @@ export async function GET() {
   }
 
   const managerId = session.user.id;
+  const organizationId = session.user.organizationId;
   const monthStart = getUTCMonthStart();
 
   try {
+    // $1 = managerId  $2 = monthStart  $3 = organizationId
     const sql = `
       WITH
-      -- All active sales reps under this manager
       my_team AS (
         SELECT id, name
         FROM users
-        WHERE manager_id = $1
+        WHERE organization_id = $3
+          AND manager_id = $1
           AND role       = 'scales_man'
           AND is_active  = true
       ),
 
-      -- Manager's own won deals this month
       my_won AS (
         SELECT
-          COALESCE(SUM(value), 0)                                        AS closed_value,
-          COUNT(*)                                                        AS closed_count,
-          AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400.0)  AS avg_close_days
+          COALESCE(SUM(value), 0)                                       AS closed_value,
+          COUNT(*)                                                       AS closed_count,
+          AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400.0) AS avg_close_days
         FROM deals
-        WHERE generated_month = $2
-          AND status           = 'won'
-          AND assigned_to      = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'won'
+          AND assigned_to     = $1
       ),
 
-      -- Manager's own active deals this month
       my_active AS (
         SELECT COALESCE(SUM(value), 0) AS personal_pipeline
         FROM deals
-        WHERE generated_month = $2
-          AND status           = 'active'
-          AND assigned_to      = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'active'
+          AND assigned_to     = $1
       ),
 
-      -- Team won deals this month
       team_won AS (
         SELECT
           COALESCE(SUM(value), 0) AS team_closed_value,
           COUNT(*)                AS team_closed_count
         FROM deals
-        WHERE generated_month = $2
-          AND status           = 'won'
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'won'
           AND assigned_to IN (SELECT id FROM my_team)
       ),
 
-      -- Team active deals this month
       team_active AS (
         SELECT COALESCE(SUM(value), 0) AS team_pipeline
         FROM deals
-        WHERE generated_month = $2
-          AND status           = 'active'
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'active'
           AND assigned_to IN (SELECT id FROM my_team)
       ),
 
-      -- Total deals created for the team this month (target denominator)
       team_created AS (
         SELECT COUNT(*) AS team_created_count
         FROM deals
-        WHERE generated_month = $2
+        WHERE organization_id = $3
+          AND generated_month = $2
           AND assigned_to IN (SELECT id FROM my_team)
       ),
 
-      -- Previous month deltas
       prev_team_won AS (
         SELECT COALESCE(SUM(value), 0) AS prev_team_closed
         FROM deals
-        WHERE generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
-          AND status           = 'won'
+        WHERE organization_id = $3
+          AND generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
+          AND status          = 'won'
           AND assigned_to IN (SELECT id FROM my_team)
       ),
 
       prev_team_active AS (
         SELECT COALESCE(SUM(value), 0) AS prev_team_pipeline
         FROM deals
-        WHERE generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
-          AND status           = 'active'
+        WHERE organization_id = $3
+          AND generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
+          AND status          = 'active'
           AND assigned_to IN (SELECT id FROM my_team)
       ),
 
-      -- Per-rep performance:
-      -- total_assigned = all deals assigned to them this month
-      -- closed_deals   = won deals assigned to them this month
       rep_performance AS (
         SELECT
           u.id,
@@ -111,12 +111,12 @@ export async function GET() {
         FROM my_team u
         LEFT JOIN deals d
           ON  d.assigned_to     = u.id
+          AND d.organization_id = $3
           AND d.generated_month = $2
         GROUP BY u.id, u.name
         ORDER BY closed_deals DESC, total_value DESC
       ),
 
-      -- Manager's own active deals detail
       my_deals AS (
         SELECT
           d.id,
@@ -132,14 +132,14 @@ export async function GET() {
             0
           ) AS days_in_stage
         FROM deals d
-        WHERE d.generated_month = $2
-          AND d.assigned_to      = $1
-          AND d.status           = 'active'
+        WHERE d.organization_id = $3
+          AND d.generated_month = $2
+          AND d.assigned_to     = $1
+          AND d.status          = 'active'
         ORDER BY d.value DESC
         LIMIT 8
       ),
 
-      -- Recent team deals
       team_recent AS (
         SELECT
           d.id,
@@ -159,7 +159,8 @@ export async function GET() {
           ) AS days_in_stage
         FROM deals d
         LEFT JOIN users u ON d.assigned_to = u.id
-        WHERE d.generated_month = $2
+        WHERE d.organization_id = $3
+          AND d.generated_month = $2
           AND d.assigned_to IN (SELECT id FROM my_team)
         ORDER BY d.updated_at DESC
         LIMIT 10
@@ -193,7 +194,7 @@ export async function GET() {
            team_created tc, prev_team_won ptw, prev_team_active pta;
     `;
 
-    const { rows } = await query(sql, [managerId, monthStart]);
+    const { rows } = await query(sql, [managerId, monthStart, organizationId]);
     const row = rows[0];
 
     const teamClosedCount = Number(row.team_closed_count ?? 0);
@@ -220,15 +221,11 @@ export async function GET() {
         pipeline: teamPipeline,
         closedValue: teamClosedValue,
         closedCount: teamClosedCount,
-
-        // Real target: closed out of total created this month
-        // No more hardcoded 20
         totalCreated: teamCreatedCount,
         targetPercent:
           teamCreatedCount > 0
             ? Math.round((teamClosedCount / teamCreatedCount) * 100)
             : 0,
-
         pipelineDelta:
           prevTeamPipeline > 0
             ? Math.round(

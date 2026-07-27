@@ -10,6 +10,7 @@ function getClientIp(req: Request): string | null {
 }
 
 async function logActivity(params: {
+  organizationId: string;
   userId: string;
   activityType: string;
   description?: string;
@@ -20,6 +21,7 @@ async function logActivity(params: {
 }) {
   try {
     const {
+      organizationId,
       userId,
       activityType,
       description,
@@ -31,9 +33,10 @@ async function logActivity(params: {
 
     await query(
       `INSERT INTO user_activities
-        (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
-       VALUES ($1, $1, $2, $3, $4, $5, $6, $7)`,
+        (organization_id, user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8)`,
       [
+        organizationId,
         userId,
         activityType,
         description ?? null,
@@ -62,7 +65,7 @@ export async function POST(request: Request) {
 
     // 1. Fetch user profile
     const { rows } = await query(
-      `SELECT id, email_otp, email_otp_expires_at, is_verified
+      `SELECT id, organization_id, email_otp, email_otp_expires_at, is_verified
        FROM users
        WHERE LOWER(email) = LOWER($1)
        LIMIT 1`,
@@ -130,6 +133,7 @@ export async function POST(request: Request) {
 
     // 4. Log activity — self-performed, no session exists yet at OTP stage
     await logActivity({
+      organizationId: profile.organization_id,
       userId: profile.id,
       activityType: "email_verified",
       description: `Email ${email} verified successfully`,

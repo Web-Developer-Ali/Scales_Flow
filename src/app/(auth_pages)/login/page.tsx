@@ -23,12 +23,16 @@ function LoginForm() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const searchParams = useSearchParams();
+  const initialOrgSlug = searchParams.get("org")?.trim() ?? "";
+
   const [formData, setFormData] = useState(() => {
     if (typeof window === "undefined") {
       return {
         email: "",
         password: "",
         rememberMe: false,
+        orgSlug: initialOrgSlug,
       };
     }
 
@@ -38,6 +42,7 @@ function LoginForm() {
       email: rememberedEmail ?? "",
       password: "",
       rememberMe: Boolean(rememberedEmail),
+      orgSlug: initialOrgSlug,
     };
   });
   const [errors, setErrors] = useState<{
@@ -46,7 +51,6 @@ function LoginForm() {
     general?: string;
   }>({});
 
-  const searchParams = useSearchParams();
   const resetSuccess = searchParams.get("reset") === "success";
 
   // Handle form input changes
@@ -96,11 +100,14 @@ function LoginForm() {
 
     try {
       const normalizedEmail = formData.email.trim().toLowerCase();
+      const normalizedOrgSlug = formData.orgSlug.trim().toLowerCase();
       const result = await signIn("credentials", {
         email: normalizedEmail,
         password: formData.password,
+        orgSlug: normalizedOrgSlug,
         redirect: false,
       });
+      console.log("Login result:", result);
 
       if (result?.ok) {
         toast.success("Login successful!");
@@ -111,8 +118,10 @@ function LoginForm() {
         }
         router.refresh();
       } else {
-        // Generic error message for security
-        const errorMsg = "Invalid email or password. Please try again.";
+        const errorMsg =
+          result?.error === "Workspace required"
+            ? "Please enter your workspace name before signing in."
+            : "Invalid email or password. Please try again.";
         setErrors({ general: errorMsg });
         toast.error(errorMsg);
       }
@@ -219,6 +228,30 @@ function LoginForm() {
                   {errors.email}
                 </p>
               )}
+            </div>
+
+            {/* Workspace Field */}
+            <div>
+              <label
+                htmlFor="orgSlug"
+                className="block text-sm font-semibold text-slate-900 mb-2"
+              >
+                Workspace
+              </label>
+              <input
+                id="orgSlug"
+                name="orgSlug"
+                type="text"
+                value={formData.orgSlug}
+                onChange={handleChange}
+                autoComplete="organization"
+                className="block w-full px-3 py-3 rounded-lg border border-slate-300 shadow-sm placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                placeholder="your-workspace"
+                disabled={isLoading}
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                Use the workspace slug from your organization URL, if available.
+              </p>
             </div>
 
             {/* Password Field */}

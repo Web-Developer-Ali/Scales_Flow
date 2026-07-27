@@ -1,16 +1,8 @@
-import { DefaultSession } from "next-auth";
-import { JWT as DefaultJWT } from "next-auth/jwt";
-
-/* ============================================================
-   USER ROLE TYPE
-   ============================================================ */
+// types/next-auth.ts
 
 export type UserRole = "admin" | "manager" | "scales_man";
 
-/* ============================================================
-   DATABASE USER INTERFACE
-   ============================================================ */
-
+// ← Added export keyword + organization_id + org_plan
 export interface DatabaseUser {
   id: string;
   email: string;
@@ -18,6 +10,9 @@ export interface DatabaseUser {
   name: string;
   role: UserRole;
   company_name: string | null;
+  organization_id: string; // ← new
+  org_plan: string; // ← new
+  org_is_active: boolean; // ← new (from the JOIN in authOptions)
   is_active: boolean;
   is_verified: boolean;
   must_reset_password: boolean;
@@ -37,6 +32,8 @@ declare module "next-auth" {
       companyName?: string | null;
       email?: string | null;
       name?: string | null;
+      organizationId: string; // ← new
+      orgPlan: string; // ← new
       is_active?: boolean;
       is_verified?: boolean;
       must_reset_password: boolean;
@@ -49,6 +46,8 @@ declare module "next-auth" {
     companyName?: string | null;
     email: string;
     name: string;
+    organizationId: string; // ← new
+    orgPlan: string; // ← new
     is_verified?: boolean;
     is_active?: boolean;
     must_reset_password?: boolean;
@@ -64,6 +63,8 @@ declare module "next-auth/jwt" {
     id: string;
     role: UserRole;
     companyName?: string | null;
+    organizationId: string; // ← new
+    orgPlan: string; // ← new
     is_verified?: boolean;
     is_active?: boolean;
     must_reset_password?: boolean;

@@ -1,9 +1,14 @@
--- ── EMAIL SETTINGS ────────────────────────────────────────────────────────────
--- Stores admin-configurable email preferences
--- Only one row ever exists (singleton pattern)
+-- ============================================================
+-- EMAIL SETTINGS TABLE - Multi-tenant
+-- ============================================================
+-- Per-organization email settings
+-- Each organization configures their own email credentials
 
 CREATE TABLE IF NOT EXISTS email_settings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Multi-tenant
+    organization_id UUID NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
 
     -- Master switch: if false, no emails are sent at all
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -34,11 +39,7 @@ CREATE TABLE IF NOT EXISTS email_settings (
     updated_by UUID REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Only ever one settings row
-CREATE UNIQUE INDEX IF NOT EXISTS idx_email_settings_singleton
-    ON email_settings ((TRUE));
-
--- Seed default row so the app always has something to read
-INSERT INTO email_settings (enabled, provider)
-VALUES (FALSE, 'nodemailer')
-ON CONFLICT DO NOTHING;
+-- ── Indexes ───────────────────────────────────────────────────────────────────
+-- One settings row per organization (enforced by UNIQUE constraint)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_settings_per_org
+    ON email_settings (organization_id);

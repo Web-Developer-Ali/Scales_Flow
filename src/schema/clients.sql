@@ -1,3 +1,7 @@
+-- ============================================================
+-- CLIENTS TABLE - Multi-tenant
+-- ============================================================
+
 -- ── ENUM ──────────────────────────────────────────────────────────────────────
 DO $$ BEGIN
   CREATE TYPE client_status AS ENUM ('prospect', 'active', 'inactive');
@@ -7,6 +11,9 @@ END $$;
 -- ── CLIENTS TABLE ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS clients (
   id                    UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Multi-tenant
+  organization_id       UUID          NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
 
   company_name          VARCHAR(255)  NOT NULL,
   industry              VARCHAR(100),
@@ -45,23 +52,21 @@ BEFORE UPDATE ON clients
 FOR EACH ROW EXECUTE FUNCTION update_client_timestamp();
 
 -- ── INDEXES ───────────────────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_clients_assigned_to
-  ON clients (assigned_to);
+-- All indexes include organization_id as leading column
 
-CREATE INDEX IF NOT EXISTS idx_clients_status
-  ON clients (status);
+DROP INDEX IF EXISTS idx_clients_assigned_to;
+DROP INDEX IF EXISTS idx_clients_status;
+DROP INDEX IF EXISTS idx_clients_created_by;
+DROP INDEX IF EXISTS idx_clients_company_name;
 
-CREATE INDEX IF NOT EXISTS idx_clients_created_by
-  ON clients (created_by);
+CREATE INDEX IF NOT EXISTS idx_clients_org_assigned_to
+    ON clients (organization_id, assigned_to);
 
--- Fast search by company name (case-insensitive via ILIKE)
-CREATE INDEX IF NOT EXISTS idx_clients_company_name
-  ON clients (company_name);
+CREATE INDEX IF NOT EXISTS idx_clients_org_status
+    ON clients (organization_id, status);
 
--- ── 3D: Link deals to clients ─────────────────────────────────────────────────
-ALTER TABLE deals
-  ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_org_created_by
+    ON clients (organization_id, created_by);
 
-CREATE INDEX IF NOT EXISTS idx_deals_client_id
-  ON deals (client_id)
-  WHERE client_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_org_company_name
+    ON clients (organization_id, company_name);

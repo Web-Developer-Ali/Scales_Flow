@@ -10,6 +10,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const managerId = session.user.id;
+  const organizationId = session.user.organizationId;
+
   const { searchParams } = new URL(req.url);
   const stage = searchParams.get("stage") ?? "all";
   const status = searchParams.get("status") ?? "all";
@@ -17,25 +20,27 @@ export async function GET(req: Request) {
   const repId = searchParams.get("rep") ?? "all";
   const sort = searchParams.get("sort") ?? "created_at_desc";
 
-  const managerId = session.user.id;
+  // Whitelist sort options — never interpolate user input directly into SQL
+  const ORDER_MAP: Record<string, string> = {
+    created_at_desc: "b.created_at DESC",
+    created_at_asc: "b.created_at ASC",
+    value_desc: "b.value DESC",
+    value_asc: "b.value ASC",
+    probability_desc: "b.probability DESC",
+    days_desc: "b.days_in_stage DESC",
+    rep_asc: "b.rep_name ASC",
+  };
+  const ORDER = ORDER_MAP[sort] ?? "b.created_at DESC";
 
   try {
-    // Whitelist sort options — never interpolate user input directly
-    const ORDER_MAP: Record<string, string> = {
-      created_at_desc: "b.created_at DESC",
-      created_at_asc: "b.created_at ASC",
-      value_desc: "b.value DESC",
-      value_asc: "b.value ASC",
-      probability_desc: "b.probability DESC",
-      days_desc: "b.days_in_stage DESC",
-      rep_asc: "b.rep_name ASC",
-    };
-    const ORDER = ORDER_MAP[sort] ?? "b.created_at DESC";
-
-    // Build dynamic WHERE on top of the team filter
-    const conditions: string[] = ["d.assigned_to IN (SELECT id FROM my_team)"];
-    const params: unknown[] = [managerId];
-    let paramIndex = 2;
+    // $1 = managerId   $2 = organizationId
+    // Dynamic filters start at $3
+    const conditions: string[] = [
+      "d.organization_id = $2", // org scope on deals
+      "d.assigned_to IN (SELECT id FROM my_team)", // team scope
+    ];
+    const params: unknown[] = [managerId, organizationId];
+    let paramIndex = 3;
 
     if (stage !== "all") {
       conditions.push(`d.stage = $${paramIndex}::deal_stage`);
@@ -66,83 +71,88 @@ export async function GET(req: Request) {
     const WHERE = conditions.join(" AND ");
 
     const sql = `
-  WITH
-  -- Manager's direct reports + the manager themselves
-  my_team AS (
-    SELECT id, name
-    FROM users
-    WHERE manager_id = $1
-      AND role       = 'scales_man'
-      AND is_active  = true
+      WITH
+      -- Manager's direct reports + the manager themselves, both org-scoped
+      my_team AS (
+        SELECT id, name
+        FROM users
+        WHERE organization_id = $2
+          AND manager_id      = $1
+          AND role            = 'scales_man'
+          AND is_active       = true
 
-    UNION ALL
+        UNION ALL
 
-    SELECT id, name
-    FROM users
-    WHERE id = $1
-  ),
+        SELECT id, name
+        FROM users
+        WHERE id              = $1
+          AND organization_id = $2
+      ),
 
-  base AS (
-    SELECT
-      d.id,
-      d.title,
-      d.company,
-      d.contact_person,
-      d.contact_email,
-      d.value,
-      d.stage::text,
-      d.status::text,
-      d.probability,
-      d.expected_close_date,
-      d.description,
-      d.created_at,
-      d.updated_at,
-      d.assigned_to,
-      u.name  AS rep_name,
-      u.email AS rep_email,
-      GREATEST(
-        EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400.0,
-        0
-      ) AS days_in_stage
-    FROM deals d
-    LEFT JOIN users u ON d.assigned_to = u.id
-    WHERE ${WHERE}
-  ),
+      base AS (
+        SELECT
+          d.id,
+          d.title,
+          d.company,
+          d.contact_person,
+          d.contact_email,
+          d.value,
+          d.stage::text,
+          d.status::text,
+          d.probability,
+          d.expected_close_date,
+          d.description,
+          d.created_at,
+          d.updated_at,
+          d.assigned_to,
+          u.name  AS rep_name,
+          u.email AS rep_email,
+          GREATEST(
+            EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400.0,
+            0
+          ) AS days_in_stage
+        FROM deals d
+        LEFT JOIN users u ON d.assigned_to = u.id
+        WHERE ${WHERE}
+      ),
 
-  stats AS (
-    SELECT
-      COUNT(*)                                       AS total_deals,
-      COALESCE(SUM(value), 0)                        AS total_pipeline,
-      COALESCE(AVG(probability), 0)                  AS avg_probability,
-      COALESCE(SUM(value * probability / 100.0), 0)  AS expected_revenue,
-      COUNT(*) FILTER (WHERE status = 'won')         AS won_count,
-      COUNT(*) FILTER (WHERE status = 'active')      AS active_count,
-      COUNT(*) FILTER (WHERE status = 'lost')        AS lost_count
-    FROM base
-  ),
+      stats AS (
+        SELECT
+          COUNT(*)                                       AS total_deals,
+          COALESCE(SUM(value), 0)                        AS total_pipeline,
+          COALESCE(AVG(probability), 0)                  AS avg_probability,
+          COALESCE(SUM(value * probability / 100.0), 0)  AS expected_revenue,
+          COUNT(*) FILTER (WHERE status = 'won')         AS won_count,
+          COUNT(*) FILTER (WHERE status = 'active')      AS active_count,
+          COUNT(*) FILTER (WHERE status = 'lost')        AS lost_count
+        FROM base
+      ),
 
-  rep_summary AS (
-    SELECT
-      t.id,
-      t.name,
-      COUNT(d.id)                                         AS total_deals,
-      COUNT(d.id) FILTER (WHERE d.status = 'active')     AS active_deals,
-      COUNT(d.id) FILTER (WHERE d.status = 'won')        AS won_deals,
-      COALESCE(SUM(d.value), 0)                          AS pipeline_value
-    FROM my_team t
-    LEFT JOIN deals d
-      ON  d.assigned_to = t.id
-      AND d.created_at >= DATE_TRUNC('month', NOW())
-    GROUP BY t.id, t.name
-    ORDER BY pipeline_value DESC
-  )
+      -- Per-rep summary for the current month
+      -- Uses generated_month (indexed) instead of created_at >= DATE_TRUNC(...)
+      rep_summary AS (
+        SELECT
+          t.id,
+          t.name,
+          COUNT(d.id)                                     AS total_deals,
+          COUNT(d.id) FILTER (WHERE d.status = 'active') AS active_deals,
+          COUNT(d.id) FILTER (WHERE d.status = 'won')    AS won_deals,
+          COALESCE(SUM(d.value), 0)                      AS pipeline_value
+        FROM my_team t
+        LEFT JOIN deals d
+          ON  d.assigned_to     = t.id
+          AND d.organization_id = $2
+          AND d.generated_month = DATE_TRUNC('month', NOW())::date
+        GROUP BY t.id, t.name
+        ORDER BY pipeline_value DESC
+      )
 
-  SELECT
-    (SELECT row_to_json(s) FROM stats s)                                      AS stats,
-    (SELECT COALESCE(json_agg(b ORDER BY ${ORDER}), '[]'::json) FROM base b)  AS deals,
-    (SELECT COALESCE(json_agg(r ORDER BY r.pipeline_value DESC), '[]'::json)
-     FROM rep_summary r)                                                        AS reps;
-`;
+      SELECT
+        (SELECT row_to_json(s) FROM stats s)                                     AS stats,
+        (SELECT COALESCE(json_agg(b ORDER BY ${ORDER}), '[]'::json) FROM base b) AS deals,
+        (SELECT COALESCE(json_agg(r ORDER BY r.pipeline_value DESC), '[]'::json)
+         FROM rep_summary r)                                                       AS reps;
+    `;
 
     const { rows } = await query(sql, params);
     const row = rows[0];

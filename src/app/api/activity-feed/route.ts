@@ -12,8 +12,8 @@ export async function GET(req: Request) {
 
   const role = session.user.role;
   const userId = session.user.id;
+  const organizationId = session.user.organizationId;
 
-  // Only admin and manager can see the activity feed
   if (!["admin", "manager"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -21,43 +21,48 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "30"), 100);
   const offset = parseInt(searchParams.get("offset") ?? "0");
-  const type = searchParams.get("type") ?? "all"; // filter by activity type
+  const type = searchParams.get("type") ?? "all";
 
   try {
-    // Build WHERE based on role
-    // Admin sees all activity
-    // Manager sees only their team's activity
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
 
+    // ── Always scope to this org first ────────────────────────────────────────
+    // This is the primary tenant isolation guard on this route.
+    conditions.push(`ua.organization_id = $${idx}`);
+    params.push(organizationId);
+    idx++;
+
+    // ── Role-based scope ──────────────────────────────────────────────────────
+    // Admin: sees all activity within the org (org filter above is enough)
+    // Manager: sees only their own team's activity + // app/api/activity-feed/route.tstheir own
     if (role === "manager") {
-      // Activities where the user_id is the manager's team member
       conditions.push(`
         ua.user_id IN (
           SELECT id FROM users
-          WHERE manager_id = $${idx}
-            AND role       = 'scales_man'
+          WHERE organization_id = $${idx - 1}   -- same org, already in params
+            AND manager_id      = $${idx}
+            AND role            = 'scales_man'
           UNION ALL
-          SELECT $${idx}::uuid  -- include manager's own activity
+          SELECT $${idx}::uuid                   -- include the manager's own activity
         )
       `);
       params.push(userId);
       idx++;
     }
 
+    // ── Optional activity type filter ─────────────────────────────────────────
     if (type !== "all") {
       conditions.push(`ua.activity_type = $${idx}::user_activity_type`);
       params.push(type);
       idx++;
     }
 
-    const WHERE = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Limit and offset params
-    params.push(limit, offset);
+    const WHERE = `WHERE ${conditions.join(" AND ")}`;
     const limitIdx = idx;
     const offsetIdx = idx + 1;
+    params.push(limit, offset);
 
     const sql = `
       SELECT
@@ -68,43 +73,61 @@ export async function GET(req: Request) {
         ua.entity_id,
         ua.created_at,
 
-        -- Who the activity belongs to
         ua.user_id,
-        u.name  AS user_name,
-        u.role  AS user_role,
+        u.name AS user_name,
+        u.role AS user_role,
 
-        -- Who performed it (admin/manager acting on behalf)
         ua.performed_by,
-        p.name  AS performed_by_name,
+        p.name AS performed_by_name,
 
-        -- Entity detail: enrich with deal/client/user name
+        -- Enrich with entity details — scoped to org to prevent cross-tenant leaks
         CASE
           WHEN ua.entity_type = 'deal'
-          THEN (SELECT title FROM deals WHERE id = ua.entity_id)
+          THEN (
+            SELECT title FROM deals
+            WHERE id = ua.entity_id
+              AND organization_id = $1
+          )
           ELSE NULL
         END AS deal_title,
 
         CASE
           WHEN ua.entity_type = 'deal'
-          THEN (SELECT company FROM deals WHERE id = ua.entity_id)
+          THEN (
+            SELECT company FROM deals
+            WHERE id = ua.entity_id
+              AND organization_id = $1
+          )
           ELSE NULL
         END AS deal_company,
 
         CASE
           WHEN ua.entity_type = 'deal'
-          THEN (SELECT value FROM deals WHERE id = ua.entity_id)
+          THEN (
+            SELECT value FROM deals
+            WHERE id = ua.entity_id
+              AND organization_id = $1
+          )
           ELSE NULL
         END AS deal_value,
 
         CASE
           WHEN ua.entity_type = 'client'
-          THEN (SELECT company_name FROM clients WHERE id = ua.entity_id)
+          THEN (
+            SELECT company_name FROM clients
+            WHERE id = ua.entity_id
+              AND organization_id = $1
+          )
           ELSE NULL
         END AS client_name,
 
         CASE
           WHEN ua.entity_type = 'user'
-          THEN (SELECT name FROM users WHERE id = ua.entity_id)
+          THEN (
+            SELECT name FROM users
+            WHERE id = ua.entity_id
+              AND organization_id = $1
+          )
           ELSE NULL
         END AS affected_user_name
 
@@ -116,7 +139,7 @@ export async function GET(req: Request) {
       LIMIT $${limitIdx} OFFSET $${offsetIdx};
     `;
 
-    // Total count for pagination
+    // Count query uses same WHERE but without limit/offset params
     const countSql = `
       SELECT COUNT(*) AS total
       FROM user_activities ua
@@ -125,8 +148,9 @@ export async function GET(req: Request) {
 
     const [{ rows }, { rows: countRows }] = await Promise.all([
       query(sql, params),
-      query(countSql, params.slice(0, -2)), // exclude limit/offset
+      query(countSql, params.slice(0, -2)), // strip limit + offset
     ]);
+
     return NextResponse.json({
       success: true,
       activities: rows,

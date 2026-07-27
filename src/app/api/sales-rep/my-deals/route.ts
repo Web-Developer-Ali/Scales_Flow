@@ -10,19 +10,34 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const repId = session.user.id;
+  const organizationId = session.user.organizationId;
+
   const { searchParams } = new URL(req.url);
   const stage = searchParams.get("stage") ?? "all";
   const status = searchParams.get("status") ?? "all";
   const search = searchParams.get("search") ?? "";
   const sort = searchParams.get("sort") ?? "created_at_desc";
 
-  const repId = session.user.id;
+  const ORDER_MAP: Record<string, string> = {
+    created_at_desc: "b.created_at DESC",
+    created_at_asc: "b.created_at ASC",
+    value_desc: "b.value DESC",
+    value_asc: "b.value ASC",
+    probability_desc: "b.probability DESC",
+    days_desc: "b.days_in_stage DESC",
+  };
+  const ORDER = ORDER_MAP[sort] ?? "b.created_at DESC";
 
   try {
-    // Build dynamic WHERE clauses safely
-    const conditions: string[] = ["d.assigned_to = $1"];
-    const params: unknown[] = [repId];
-    let paramIndex = 2;
+    // $1 = repId   $2 = organizationId
+    // Dynamic filters start at $3
+    const conditions: string[] = [
+      "d.assigned_to     = $1",
+      "d.organization_id = $2",
+    ];
+    const params: unknown[] = [repId, organizationId];
+    let paramIndex = 3;
 
     if (stage !== "all") {
       conditions.push(`d.stage = $${paramIndex}::deal_stage`);
@@ -46,56 +61,45 @@ export async function GET(req: Request) {
 
     const WHERE = conditions.join(" AND ");
 
-    // Sort mapping — whitelist to prevent injection
-    const ORDER_MAP: Record<string, string> = {
-      created_at_desc: "b.created_at DESC",
-      created_at_asc: "b.created_at ASC",
-      value_desc: "b.value DESC",
-      value_asc: "b.value ASC",
-      probability_desc: "b.probability DESC",
-      days_desc: "b.days_in_stage DESC", // already computed in base CTE
-    };
-    const ORDER = ORDER_MAP[sort] ?? "d.created_at DESC";
-
     const sql = `
-    WITH base AS (
+      WITH base AS (
+        SELECT
+          d.id,
+          d.title,
+          d.company,
+          d.contact_person,
+          d.contact_email,
+          d.value,
+          d.stage::text,
+          d.status::text,
+          d.probability,
+          d.expected_close_date,
+          d.description,
+          d.created_at,
+          d.updated_at,
+          GREATEST(
+            EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400.0,
+            0
+          ) AS days_in_stage
+        FROM deals d
+        WHERE ${WHERE}
+      ),
+
+      stats AS (
+        SELECT
+          COUNT(*)                                       AS total_deals,
+          COALESCE(SUM(value), 0)                        AS total_pipeline,
+          COALESCE(AVG(probability), 0)                  AS avg_probability,
+          COALESCE(SUM(value * probability / 100.0), 0)  AS expected_revenue,
+          COUNT(*) FILTER (WHERE status = 'won')         AS won_count,
+          COUNT(*) FILTER (WHERE status = 'active')      AS active_count
+        FROM base
+      )
+
       SELECT
-        d.id,
-        d.title,
-        d.company,
-        d.contact_person,
-        d.contact_email,
-        d.value,
-        d.stage::text,
-        d.status::text,
-        d.probability,
-        d.expected_close_date,
-        d.description,
-        d.created_at,
-        d.updated_at,
-        GREATEST(
-          EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400.0,
-          0
-        ) AS days_in_stage
-      FROM deals d
-      WHERE ${WHERE}
-    ),
-  
-    stats AS (
-      SELECT
-        COUNT(*)                                       AS total_deals,
-        COALESCE(SUM(value), 0)                        AS total_pipeline,
-        COALESCE(AVG(probability), 0)                  AS avg_probability,
-        COALESCE(SUM(value * probability / 100.0), 0)  AS expected_revenue,
-        COUNT(*) FILTER (WHERE status = 'won')         AS won_count,
-        COUNT(*) FILTER (WHERE status = 'active')      AS active_count
-      FROM base
-    )
-  
-    SELECT
-      (SELECT row_to_json(s) FROM stats s)                                     AS stats,
-      (SELECT COALESCE(json_agg(b ORDER BY ${ORDER}), '[]'::json) FROM base b) AS deals;
-  `;
+        (SELECT row_to_json(s) FROM stats s)                                      AS stats,
+        (SELECT COALESCE(json_agg(b ORDER BY ${ORDER}), '[]'::json) FROM base b)  AS deals;
+    `;
 
     const { rows } = await query(sql, params);
     const row = rows[0];
