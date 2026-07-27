@@ -12,6 +12,7 @@ function getClientIp(req: Request): string | null {
 }
 
 async function logActivity(params: {
+  organizationId: string;
   userId: string;
   performedBy: string;
   activityType: string;
@@ -23,6 +24,7 @@ async function logActivity(params: {
 }) {
   try {
     const {
+      organizationId,
       userId,
       performedBy,
       activityType,
@@ -35,9 +37,10 @@ async function logActivity(params: {
 
     await query(
       `INSERT INTO user_activities
-         (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         (organization_id, user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
+        organizationId,
         userId,
         performedBy,
         activityType,
@@ -279,6 +282,7 @@ export async function PATCH(
       .join(", ");
 
     await logActivity({
+      organizationId: session.user.organizationId,
       userId: (client.assigned_to as string) ?? session.user.id,
       performedBy: session.user.id,
       activityType: "client_updated",
@@ -352,6 +356,7 @@ export async function DELETE(
 
     // ── Log to user_activities ─────────────────────────────────────────────
     await logActivity({
+      organizationId: session.user.organizationId,
       userId: (client.assigned_to as string) ?? session.user.id,
       performedBy: session.user.id,
       activityType: "client_deleted",

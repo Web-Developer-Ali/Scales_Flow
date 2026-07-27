@@ -4,6 +4,31 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import bcrypt from "bcryptjs";
 
+async function logProfileActivity({
+  organizationId,
+  userId,
+  performedBy,
+  activityType,
+  description,
+}: {
+  organizationId: string;
+  userId: string;
+  performedBy: string;
+  activityType: string;
+  description: string;
+}) {
+  try {
+    await query(
+      `INSERT INTO user_activities
+         (organization_id, user_id, performed_by, activity_type, description)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [organizationId, userId, performedBy, activityType, description],
+    );
+  } catch (error) {
+    console.warn("Failed to write profile activity log:", error);
+  }
+}
+
 // ── GET: fetch profile + login history ───────────────────────────────────────
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -112,12 +137,13 @@ export async function PATCH(req: Request) {
       );
 
       // Log password change
-      await query(
-        `INSERT INTO user_activities
-           (user_id, performed_by, activity_type, description)
-         VALUES ($1, $1, 'password_change', 'Password changed successfully')`,
-        [session.user.id],
-      );
+      await logProfileActivity({
+        organizationId: session.user.organizationId,
+        userId: session.user.id,
+        performedBy: session.user.id,
+        activityType: "password_change",
+        description: "Password changed successfully",
+      });
 
       return NextResponse.json({
         success: true,
@@ -158,12 +184,13 @@ export async function PATCH(req: Request) {
     );
 
     // Log profile update
-    await query(
-      `INSERT INTO user_activities
-         (user_id, performed_by, activity_type, description)
-       VALUES ($1, $1, 'profile_update', 'Profile information updated')`,
-      [session.user.id],
-    );
+    await logProfileActivity({
+      organizationId: session.user.organizationId,
+      userId: session.user.id,
+      performedBy: session.user.id,
+      activityType: "profile_update",
+      description: "Profile information updated",
+    });
 
     return NextResponse.json({
       success: true,

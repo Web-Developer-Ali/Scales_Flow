@@ -18,52 +18,58 @@ export async function GET() {
   }
 
   const repId = session.user.id;
+  const organizationId = session.user.organizationId;
   const monthStart = getUTCMonthStart();
 
   try {
+    // $1 = repId   $2 = monthStart   $3 = organizationId
     const sql = `
       WITH
       my_won AS (
         SELECT
-          COALESCE(SUM(value), 0)                                        AS closed_value,
-          COUNT(*)                                                        AS closed_count,
-          AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400.0)  AS avg_close_days
+          COALESCE(SUM(value), 0)                                       AS closed_value,
+          COUNT(*)                                                       AS closed_count,
+          AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400.0) AS avg_close_days
         FROM deals
-        WHERE generated_month = $2
-          AND status      = 'won'
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'won'
+          AND assigned_to     = $1
       ),
 
       my_active AS (
         SELECT COALESCE(SUM(value), 0) AS pipeline_value
         FROM deals
-        WHERE generated_month = $2
-          AND status      = 'active'
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'active'
+          AND assigned_to     = $1
       ),
 
-      -- Total deals created by this rep this month (real target denominator)
       my_created AS (
         SELECT COUNT(*) AS created_count
         FROM deals
-        WHERE generated_month = $2
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND assigned_to     = $1
       ),
 
       prev_won AS (
         SELECT COALESCE(SUM(value), 0) AS prev_closed_value
         FROM deals
-        WHERE generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
-          AND status      = 'won'
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
+          AND status          = 'won'
+          AND assigned_to     = $1
       ),
 
       prev_active AS (
         SELECT COALESCE(SUM(value), 0) AS prev_pipeline
         FROM deals
-        WHERE generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
-          AND status      = 'active'
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = (DATE_TRUNC('month', $2::date) - INTERVAL '1 month')::date
+          AND status          = 'active'
+          AND assigned_to     = $1
       ),
 
       my_stages AS (
@@ -72,19 +78,21 @@ export async function GET() {
           COUNT(*)                AS deal_count,
           COALESCE(SUM(value), 0) AS stage_value
         FROM deals
-        WHERE generated_month = $2
-          AND status      = 'active'
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'active'
+          AND assigned_to     = $1
         GROUP BY stage
       ),
 
       hot_leads AS (
         SELECT COUNT(*) AS hot_count
         FROM deals
-        WHERE generated_month = $2
-          AND status      = 'active'
-          AND probability >= 60
-          AND assigned_to = $1
+        WHERE organization_id = $3
+          AND generated_month = $2
+          AND status          = 'active'
+          AND probability     >= 60
+          AND assigned_to     = $1
       ),
 
       my_recent AS (
@@ -103,12 +111,15 @@ export async function GET() {
             0
           ) AS days_in_stage
         FROM deals d
-        WHERE d.generated_month = $2
-          AND d.assigned_to = $1
+        WHERE d.organization_id = $3
+          AND d.generated_month = $2
+          AND d.assigned_to     = $1
         ORDER BY d.created_at DESC
         LIMIT 10
       ),
 
+      -- No generated_month filter here intentionally — stalled deals
+      -- can span month boundaries. Org + assigned_to is the correct scope.
       needs_attention AS (
         SELECT
           d.id,
@@ -126,10 +137,11 @@ export async function GET() {
             0
           ) AS days_in_stage
         FROM deals d
-        WHERE d.assigned_to = $1
-          AND d.status      = 'active'
-          AND d.probability >= 60
-          AND d.updated_at  < NOW() - INTERVAL '5 days'
+        WHERE d.organization_id = $3
+          AND d.assigned_to     = $1
+          AND d.status          = 'active'
+          AND d.probability     >= 60
+          AND d.updated_at      < NOW() - INTERVAL '5 days'
         ORDER BY d.probability DESC, d.value DESC
         LIMIT 6
       ),
@@ -141,7 +153,8 @@ export async function GET() {
           COUNT(*) FILTER (WHERE status = 'won')    AS won_count,
           COUNT(*) FILTER (WHERE status = 'active') AS active_count
         FROM deals
-        WHERE assigned_to     = $1
+        WHERE organization_id = $3
+          AND assigned_to     = $1
           AND generated_month >= (DATE_TRUNC('month', $2::date) - INTERVAL '5 months')::date
           AND generated_month <= $2::date
         GROUP BY generated_month
@@ -162,19 +175,19 @@ export async function GET() {
          FROM my_stages s)                                              AS stage_breakdown,
 
         (SELECT COALESCE(json_agg(r ORDER BY r.created_at DESC), '[]'::json)
-         FROM my_recent r)                                             AS recent_deals,
+         FROM my_recent r)                                              AS recent_deals,
 
         (SELECT COALESCE(json_agg(n ORDER BY n.days_stale DESC), '[]'::json)
-         FROM needs_attention n)                                       AS needs_attention,
+         FROM needs_attention n)                                        AS needs_attention,
 
         (SELECT COALESCE(json_agg(t ORDER BY t.generated_month ASC), '[]'::json)
-         FROM monthly_trend t)                                         AS monthly_trend
+         FROM monthly_trend t)                                          AS monthly_trend
 
       FROM my_won mw, my_active ma, my_created mc,
            prev_won pw, prev_active pa, hot_leads hl;
     `;
 
-    const { rows } = await query(sql, [repId, monthStart]);
+    const { rows } = await query(sql, [repId, monthStart, organizationId]);
     const row = rows[0];
 
     const closedCount = Number(row.closed_count ?? 0);
@@ -193,12 +206,9 @@ export async function GET() {
         closedCount,
         avgCloseTime: Math.round(Number(row.avg_close_days ?? 0)),
         hotLeads: Number(row.hot_count ?? 0),
-
-        // Real target: closed out of total created this month
         totalCreated: createdCount,
         targetPercent:
           createdCount > 0 ? Math.round((closedCount / createdCount) * 100) : 0,
-
         pipelineDelta:
           prevPipeline > 0
             ? Math.round(((pipelineValue - prevPipeline) / prevPipeline) * 100)

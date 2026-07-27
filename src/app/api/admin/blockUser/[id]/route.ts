@@ -3,7 +3,8 @@ import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 
-async function logActivity(params: {
+export async function logActivity(params: {
+  organizationId: string;
   userId: string;
   performedBy: string;
   activityType: string;
@@ -14,6 +15,7 @@ async function logActivity(params: {
 }) {
   try {
     const {
+      organizationId,
       userId,
       performedBy,
       activityType,
@@ -31,9 +33,11 @@ async function logActivity(params: {
 
     await query(
       `INSERT INTO user_activities
-        (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        (organization_id, user_id, performed_by, activity_type,
+         description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
+        organizationId,
         userId,
         performedBy,
         activityType,
@@ -65,6 +69,9 @@ export async function PATCH(
   const { id: userId } = await context.params;
   const { searchParams } = new URL(req.url);
   const action = searchParams.get("action");
+  const organizationId = session.user.organizationId;
+  const currentUserId = session.user.id;
+  const currentUserRole = session.user.role;
 
   if (!action || !["block", "unblock"].includes(action)) {
     return NextResponse.json(
@@ -76,9 +83,6 @@ export async function PATCH(
     );
   }
 
-  const currentUserId = session.user.id;
-  const currentUserRole = session.user.role;
-
   if (currentUserId === userId) {
     return NextResponse.json(
       { success: false, error: "You cannot block/unblock yourself" },
@@ -87,9 +91,12 @@ export async function PATCH(
   }
 
   try {
+    // Verify target belongs to same org — closes the UUID-guessing attack vector
     const { rows } = await query(
-      `SELECT id, created_by, role, email FROM users WHERE id = $1`,
-      [userId],
+      `SELECT id, created_by, role, email
+       FROM users
+       WHERE id = $1 AND organization_id = $2`,
+      [userId, organizationId],
     );
 
     if (!rows.length) {
@@ -122,13 +129,13 @@ export async function PATCH(
     const { rows: updated } = await query(
       `UPDATE users
        SET is_active = $1, updated_at = NOW()
-       WHERE id = $2
+       WHERE id = $2 AND organization_id = $3
        RETURNING id, email, is_active`,
-      [action === "unblock", userId],
+      [action === "unblock", userId, organizationId],
     );
 
-    // Log activity (does not block/fail the response)
     await logActivity({
+      organizationId,
       userId,
       performedBy: currentUserId,
       activityType: action === "block" ? "user_blocked" : "user_unblocked",

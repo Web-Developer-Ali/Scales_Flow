@@ -13,52 +13,58 @@ export async function GET(req: Request) {
   const q = searchParams.get("q")?.trim() ?? "";
   const role = session.user.role;
   const userId = session.user.id;
+  const organizationId = session.user.organizationId;
 
   if (q.length < 2) {
     return NextResponse.json({ success: true, deals: [], clients: [] });
   }
 
   try {
-    // ── Role-based deal scoping ────────────────────────────────────────────
-    const dealConditions: string[] = [];
-    const dealParams: unknown[] = [`%${q}%`];
-    let pIdx = 2;
-
-    // Text search on company + contact + title
-    dealConditions.push(`(
-      d.company        ILIKE $1 OR
-      d.contact_person ILIKE $1 OR
-      d.title          ILIKE $1
-    )`);
+    // ── DEALS ─────────────────────────────────────────────────────────────────
+    // $1 = search pattern   $2 = organizationId
+    // Role-specific params start at $3
+    const dealConditions: string[] = [
+      // text match
+      `(d.company ILIKE $1 OR d.contact_person ILIKE $1 OR d.title ILIKE $1)`,
+      // org isolation — always required
+      `d.organization_id = $2`,
+    ];
+    const dealParams: unknown[] = [`%${q}%`, organizationId];
+    let dIdx = 3;
 
     if (role === "scales_man") {
-      dealConditions.push(`d.assigned_to = $${pIdx}`);
+      dealConditions.push(`d.assigned_to = $${dIdx}`);
       dealParams.push(userId);
-      pIdx++;
+      dIdx++;
     } else if (role === "manager") {
-      dealConditions.push(`d.assigned_to IN (
-        SELECT id FROM users
-        WHERE manager_id = $${pIdx}
-          AND role = 'scales_man'
-        UNION ALL SELECT $${pIdx}::uuid
-      )`);
+      // Manager sees their own deals + their direct reports' deals
+      // Both user subqueries also org-scoped
+      dealConditions.push(`
+        d.assigned_to IN (
+          SELECT id FROM users
+          WHERE organization_id = $2
+            AND manager_id      = $${dIdx}
+            AND role            = 'scales_man'
+          UNION ALL
+          SELECT $${dIdx}::uuid
+        )
+      `);
       dealParams.push(userId);
-      pIdx++;
+      dIdx++;
     }
-    // Admin: no extra filter
+    // admin: org filter ($2) is the only scope needed
 
     const dealWhere = `WHERE ${dealConditions.join(" AND ")}`;
 
-    // ── Role-based client scoping ──────────────────────────────────────────
-    const clientConditions: string[] = [];
-    const clientParams: unknown[] = [`%${q}%`];
-    let cIdx = 2;
-
-    clientConditions.push(`(
-      c.company_name         ILIKE $1 OR
-      c.primary_contact_name ILIKE $1 OR
-      c.primary_contact_email ILIKE $1
-    )`);
+    // ── CLIENTS ───────────────────────────────────────────────────────────────
+    // $1 = search pattern   $2 = organizationId
+    // Role-specific params start at $3
+    const clientConditions: string[] = [
+      `(c.company_name ILIKE $1 OR c.primary_contact_name ILIKE $1 OR c.primary_contact_email ILIKE $1)`,
+      `c.organization_id = $2`,
+    ];
+    const clientParams: unknown[] = [`%${q}%`, organizationId];
+    let cIdx = 3;
 
     if (role === "scales_man") {
       clientConditions.push(`c.assigned_to = $${cIdx}`);
@@ -66,10 +72,12 @@ export async function GET(req: Request) {
       cIdx++;
     } else if (role === "manager") {
       clientConditions.push(`(
-        c.assigned_to = $${cIdx} OR
-        c.assigned_to IN (
+        c.assigned_to = $${cIdx}
+        OR c.assigned_to IN (
           SELECT id FROM users
-          WHERE manager_id = $${cIdx} AND role = 'scales_man'
+          WHERE organization_id = $2
+            AND manager_id      = $${cIdx}
+            AND role            = 'scales_man'
         )
       )`);
       clientParams.push(userId);

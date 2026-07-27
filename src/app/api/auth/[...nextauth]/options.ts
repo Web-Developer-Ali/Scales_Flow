@@ -32,66 +32,74 @@ export const authOptions: NextAuthOptions = {
       },
 
       async authorize(credentials): Promise<User | null> {
-        if (
-          !credentials?.email ||
-          !credentials?.password ||
-          !credentials?.orgSlug
-        ) {
+        if (!credentials?.email || !credentials?.password) {
           throw new Error("Invalid credentials");
         }
 
         const email = credentials.email.toLowerCase().trim();
         const password = credentials.password;
-        const orgSlug = credentials.orgSlug.toLowerCase().trim();
+        const orgSlug = credentials.orgSlug?.toString().trim().toLowerCase();
 
         try {
-          // Single query: join users → organizations
-          // Scopes the login to the correct org so the same email
-          // in two different agencies never collides.
-          const { rows } = await pool.query<
-            DatabaseUser & {
-              organization_id: string;
-              org_is_active: boolean;
-              org_plan: string;
-            }
-          >(
-            `
+          const queryText = `
             SELECT
               u.*,
-              o.id   AS organization_id,
+              o.id AS organization_id,
+              o.slug AS org_slug,
               o.is_active AS org_is_active,
-              o.plan      AS org_plan
+              o.plan AS org_plan
             FROM users u
             JOIN organizations o ON o.id = u.organization_id
             WHERE LOWER(u.email) = LOWER($1)
-              AND o.slug = $2
+              ${orgSlug ? "AND o.slug = $2" : ""}
               AND (
-                u.failed_login_attempts < $3
+                u.failed_login_attempts < $${orgSlug ? 3 : 2}
                 OR u.last_failed_login_at IS NULL
                 OR u.last_failed_login_at < NOW() - INTERVAL '${LOCK_MINUTES} minutes'
               )
-            LIMIT 1
-            `,
-            [email, orgSlug, MAX_FAILED_ATTEMPTS],
-          );
+            LIMIT 2
+          `;
 
-          const user = rows[0];
+          const params = orgSlug
+            ? [email, orgSlug, MAX_FAILED_ATTEMPTS]
+            : [email, MAX_FAILED_ATTEMPTS];
 
-          if (!user) {
+          const { rows } = await pool.query<
+            DatabaseUser & {
+              organization_id: string;
+              org_slug: string;
+              org_is_active: boolean;
+              org_plan: string;
+            }
+          >(queryText, params);
+
+          const matches = rows as Array<
+            DatabaseUser & {
+              organization_id: string;
+              org_slug: string;
+              org_is_active: boolean;
+              org_plan: string;
+            }
+          >;
+
+          if (!matches.length) {
             throw new Error("Invalid credentials");
           }
 
-          // Check org is still active (not expired/suspended by you)
+          if (!orgSlug && matches.length > 1) {
+            throw new Error("Workspace required");
+          }
+
+          const user = matches[0];
+
           if (!user.org_is_active) {
             throw new Error("Invalid credentials");
           }
 
-          // Check user account status
           if (!user.is_active || !user.is_verified) {
             throw new Error("Invalid credentials");
           }
 
-          // Validate password
           const isValid = await compare(password, user.password_hash);
 
           if (!isValid) {
@@ -107,7 +115,6 @@ export const authOptions: NextAuthOptions = {
             throw new Error("Invalid credentials");
           }
 
-          // Reset failed attempts on success
           await pool.query(
             `
             UPDATE users
@@ -126,15 +133,19 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
             role: user.role,
             companyName: user.company_name,
-            organizationId: user.organization_id, // ← new
-            orgPlan: user.org_plan, // ← new (useful for feature gating)
+            organizationId: user.organization_id,
+            orgPlan: user.org_plan,
             is_verified: user.is_verified,
             is_active: user.is_active,
             must_reset_password: user.must_reset_password,
           };
         } catch (error) {
           console.error("Auth error:", error);
-          throw new Error("Invalid credentials");
+          throw new Error(
+            error instanceof Error && error.message === "Workspace required"
+              ? "Workspace required"
+              : "Invalid credentials",
+          );
         }
       },
     }),

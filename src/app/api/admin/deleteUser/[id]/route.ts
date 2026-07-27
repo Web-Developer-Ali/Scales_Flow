@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { query } from "@/lib/db";
 
-async function logActivity(params: {
+export async function logActivity(params: {
+  organizationId: string; // ← new required field
   userId: string;
   performedBy: string;
   activityType: string;
@@ -14,6 +15,7 @@ async function logActivity(params: {
 }) {
   try {
     const {
+      organizationId,
       userId,
       performedBy,
       activityType,
@@ -31,9 +33,11 @@ async function logActivity(params: {
 
     await query(
       `INSERT INTO user_activities
-        (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        (organization_id, user_id, performed_by, activity_type,
+         description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
+        organizationId,
         userId,
         performedBy,
         activityType,
@@ -48,7 +52,6 @@ async function logActivity(params: {
     console.error("Activity Log Error:", err);
   }
 }
-
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ id: string }> },
@@ -63,6 +66,7 @@ export async function DELETE(
   }
 
   const { id: userIdToDelete } = await context.params;
+  const organizationId = session.user.organizationId;
   const currentUserId = session.user.id;
   const currentUserRole = session.user.role;
 
@@ -74,9 +78,12 @@ export async function DELETE(
   }
 
   try {
+    // Verify target belongs to same org
     const { rows } = await query(
-      `SELECT id, created_by, role, email FROM users WHERE id = $1`,
-      [userIdToDelete],
+      `SELECT id, created_by, role, email
+       FROM users
+       WHERE id = $1 AND organization_id = $2`,
+      [userIdToDelete, organizationId],
     );
 
     if (!rows.length) {
@@ -92,7 +99,7 @@ export async function DELETE(
       currentUserRole === "admin" ||
       (currentUserRole === "manager" &&
         target.created_by === currentUserId &&
-        target.role === "scales_man"); // managers can only delete their own sales reps
+        target.role === "scales_man");
 
     if (!canDelete) {
       return NextResponse.json(
@@ -101,10 +108,10 @@ export async function DELETE(
       );
     }
 
-    // Log BEFORE deleting — user_activities.user_id has ON DELETE CASCADE,
-    // so logging against the target after deletion would wipe the log row too.
+    // Log BEFORE deleting — CASCADE would wipe the log row if we logged after
     await logActivity({
-      userId: currentUserId, // attribute the record to the actor, so it survives
+      organizationId,
+      userId: currentUserId, // attribute to actor so it survives the delete
       performedBy: currentUserId,
       activityType: "user_deleted",
       description: `Deleted user ${target.email} (id: ${userIdToDelete}, role: ${target.role})`,
@@ -114,8 +121,10 @@ export async function DELETE(
     });
 
     const { rows: deleted } = await query(
-      `DELETE FROM users WHERE id = $1 RETURNING id, email`,
-      [userIdToDelete],
+      `DELETE FROM users
+       WHERE id = $1 AND organization_id = $2
+       RETURNING id, email`,
+      [userIdToDelete, organizationId],
     );
 
     return NextResponse.json({

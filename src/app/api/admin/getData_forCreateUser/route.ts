@@ -1,3 +1,6 @@
+// app/api/admin/team/route.ts
+// (or wherever your team-list GET route lives)
+
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
@@ -10,8 +13,9 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
-    // Single query — summary + members in one round-trip
     const sql = `
       WITH member_list AS (
         SELECT
@@ -22,7 +26,8 @@ export async function GET() {
           is_active,
           created_at::date AS join_date
         FROM users
-        WHERE role IN ('manager', 'scales_man')
+        WHERE organization_id = $1
+          AND role IN ('manager', 'scales_man')
         ORDER BY created_at ASC
       ),
       summary AS (
@@ -33,11 +38,11 @@ export async function GET() {
         FROM member_list
       )
       SELECT
-        (SELECT row_to_json(s) FROM summary s)                       AS summary,
-        (SELECT json_agg(m) FROM member_list m)                      AS members;
+        (SELECT row_to_json(s) FROM summary s)  AS summary,
+        (SELECT json_agg(m) FROM member_list m) AS members;
     `;
 
-    const { rows } = await query(sql);
+    const { rows } = await query(sql, [organizationId]);
     const row = rows[0];
 
     const summaryRaw = row.summary ?? {

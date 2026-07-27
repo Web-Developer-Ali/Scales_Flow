@@ -16,92 +16,92 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const organizationId = session.user.organizationId;
+
   try {
     const monthStart = getUTCMonthStart();
 
+    // $1 = monthStart, $2 = organizationId
+    // Every CTE filters by organization_id first so the org-leading indexes are used
     const sql = `
       WITH
-      -- Total pipeline = ALL active deals regardless of month
-      -- This is what agencies care about: total open revenue right now
       total_pipeline AS (
         SELECT COALESCE(SUM(value), 0) AS pipeline
         FROM deals
-        WHERE status = 'active'
+        WHERE organization_id = $2
+          AND status = 'active'
       ),
 
-      -- Deals won this calendar month
       monthly_won AS (
         SELECT
           COALESCE(SUM(value), 0)                                        AS closed_value,
           COUNT(*)                                                        AS closed_count,
           AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400.0)  AS avg_close_days
         FROM deals
-        WHERE generated_month = $1
+        WHERE organization_id = $2
+          AND generated_month = $1
           AND status = 'won'
       ),
 
-      -- All deals created this month (for target: X closed out of Y created)
       monthly_created AS (
         SELECT COUNT(*) AS created_count
         FROM deals
-        WHERE generated_month = $1
+        WHERE organization_id = $2
+          AND generated_month = $1
       ),
 
-      -- Previous month pipeline (for delta)
       prev_active AS (
         SELECT COALESCE(SUM(value), 0) AS prev_pipeline
         FROM deals
-        WHERE status = 'active'
+        WHERE organization_id = $2
+          AND status = 'active'
           AND created_at < DATE_TRUNC('month', $1::date)
       ),
 
-      -- Previous month won (for delta)
       prev_won AS (
         SELECT COALESCE(SUM(value), 0) AS prev_closed_value
         FROM deals
-        WHERE generated_month = (DATE_TRUNC('month', $1::date) - INTERVAL '1 month')::date
+        WHERE organization_id = $2
+          AND generated_month = (DATE_TRUNC('month', $1::date) - INTERVAL '1 month')::date
           AND status = 'won'
       ),
 
-      -- Pipeline by stage (all active deals, not just this month)
       stage_counts AS (
         SELECT
           stage::text AS stage,
           COUNT(*)    AS count
         FROM deals
-        WHERE status = 'active'
+        WHERE organization_id = $2
+          AND status = 'active'
         GROUP BY stage
       ),
 
-      -- Team performance:
-      -- closed_deals = won this month assigned to them
-      -- total_assigned = all deals assigned to them this month
-      -- This gives a real picture: "Ali closed 3 out of 8 deals this month"
       team_perf AS (
         SELECT
           u.id,
           u.name,
-          COUNT(d.id)                                              AS total_assigned,
-          COUNT(d.id) FILTER (WHERE d.status = 'won')             AS closed_deals,
+          COUNT(d.id)                                                AS total_assigned,
+          COUNT(d.id) FILTER (WHERE d.status = 'won')               AS closed_deals,
           COALESCE(SUM(d.value) FILTER (WHERE d.status = 'won'), 0) AS total_value
         FROM users u
         LEFT JOIN deals d
           ON  d.assigned_to     = u.id
+          AND d.organization_id = $2
           AND d.generated_month = $1
-        WHERE u.role IN ('manager', 'scales_man')
+        WHERE u.organization_id = $2
+          AND u.role IN ('manager', 'scales_man')
           AND u.is_active = true
         GROUP BY u.id, u.name
         ORDER BY closed_deals DESC, total_value DESC
         LIMIT 6
       ),
 
-      -- Recent deals (all statuses, most recent first)
       recent AS (
         SELECT
           d.id,
           d.title,
           d.company,
-          d.contact_person                                          AS contact,
+          d.contact_person AS contact,
           d.value,
           d.status::text,
           d.stage::text,
@@ -113,12 +113,13 @@ export async function GET() {
             0
           ) AS days_in_stage
         FROM deals d
+        WHERE d.organization_id = $2
         ORDER BY d.created_at DESC
         LIMIT 10
       )
 
       SELECT
-        tp.pipeline                AS total_pipeline,
+        tp.pipeline           AS total_pipeline,
         mw.closed_value,
         mw.closed_count,
         mw.avg_close_days,
@@ -139,7 +140,7 @@ export async function GET() {
            prev_won pw, prev_active pa;
     `;
 
-    const { rows } = await query(sql, [monthStart]);
+    const { rows } = await query(sql, [monthStart, organizationId]);
     const row = rows[0];
 
     const closedCount = Number(row.closed_count ?? 0);
@@ -156,18 +157,14 @@ export async function GET() {
         totalPipeline,
         closedThisMonth: closedValue,
         avgCloseTime: Math.round(Number(row.avg_close_days ?? 0)),
-
-        // Deal target = closed this month out of total created this month
-        // Not a hardcoded number — real data
         targetProgress: {
           closed: closedCount,
-          total: createdCount, // total deals created this month
+          total: createdCount,
           percent:
             createdCount > 0
               ? Math.round((closedCount / createdCount) * 100)
               : 0,
         },
-
         pipelineDelta:
           prevPipeline > 0
             ? Math.round(((totalPipeline - prevPipeline) / prevPipeline) * 100)

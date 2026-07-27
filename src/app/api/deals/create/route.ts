@@ -22,6 +22,7 @@ function getClientIp(req: Request): string | null {
 }
 
 async function logActivity(params: {
+  organizationId: string;
   userId: string;
   performedBy: string;
   activityType: string;
@@ -33,6 +34,7 @@ async function logActivity(params: {
 }) {
   try {
     const {
+      organizationId,
       userId,
       performedBy,
       activityType,
@@ -45,9 +47,10 @@ async function logActivity(params: {
 
     await query(
       `INSERT INTO user_activities
-         (user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         (organization_id, user_id, performed_by, activity_type, description, entity_type, entity_id, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
+        organizationId,
         userId,
         performedBy,
         activityType,
@@ -67,13 +70,14 @@ async function logActivity(params: {
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
-  // Only sales reps and managers can create deals
   if (
     !session?.user?.id ||
     !["scales_man", "manager"].includes(session.user.role)
   ) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const organizationId = session.user.organizationId;
 
   try {
     const body = await req.json();
@@ -146,13 +150,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate client_id belongs to this user if provided
+    // ── client_id validation — scoped to org ──────────────────────────────────
+    // Prevents attaching a client from another agency via UUID guessing
     if (client_id) {
       const { rows: clientRows } = await query(
-        `SELECT id FROM clients WHERE id = $1 AND (
-            assigned_to = $2 OR created_by = $2
-          )`,
-        [client_id, session.user.id],
+        `SELECT id FROM clients
+         WHERE id              = $1
+           AND organization_id = $2
+           AND (assigned_to = $3 OR created_by = $3)`,
+        [client_id, organizationId, session.user.id],
       );
       if (!clientRows.length) {
         return NextResponse.json(
@@ -162,9 +168,10 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Insert ────────────────────────────────────────────────────────────────
+    // ── Insert — organization_id now included ─────────────────────────────────
     const { rows } = await query(
       `INSERT INTO deals (
+        organization_id,
         title,
         company,
         contact_person,
@@ -182,55 +189,53 @@ export async function POST(req: Request) {
         created_by
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,
         'active',
-        $9,$10,$11,$12,$13,$14
+        $10,$11,$12,$13,$14,$15
       )
       RETURNING
         id, title, company, value, stage, status,
         probability, created_at`,
       [
-        title.trim(),
-        company.trim(),
-        contact_person?.trim() || null,
-        contact_email.trim().toLowerCase(),
-        contact_phone?.trim() || null,
-        dealValue,
-        currency,
-        dealStage,
-        dealProbability,
-        expected_close_date || null,
-        description?.trim() || null,
-        client_id,
-        session.user.id, // assigned_to
-        session.user.id, // created_by
+        organizationId, // $1
+        title.trim(), // $2
+        company.trim(), // $3
+        contact_person?.trim() || null, // $4
+        contact_email.trim().toLowerCase(), // $5
+        contact_phone?.trim() || null, // $6
+        dealValue, // $7
+        currency, // $8
+        dealStage, // $9
+        dealProbability, // $10
+        expected_close_date || null, // $11
+        description?.trim() || null, // $12
+        client_id, // $13
+        session.user.id, // $14 assigned_to
+        session.user.id, // $15 created_by
       ],
     );
 
     const deal = rows[0];
 
-    // ── Log to user_activities ─────────────────────────────────────────────
-    const ipAddress = getClientIp(req);
-    const userAgent = req.headers.get("user-agent") || null;
-
+    // ── Activity log ──────────────────────────────────────────────────────────
     await logActivity({
+      organizationId,
       userId: session.user.id,
       performedBy: session.user.id,
       activityType: "deal_created",
       description: `Created deal: ${deal.title} for ${deal.company}`,
       entityType: "deal",
       entityId: deal.id,
-      ipAddress,
-      userAgent,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get("user-agent") || null,
     });
 
-    // ── NOTIFICATION ──────────────────────────────────────────────────────────
-    // Notify manager that a deal has been created by their rep
-
-    // First, get the user's details including their manager
+    // ── Notification — manager lookup scoped to org ───────────────────────────
     const { rows: userRows } = await query(
-      `SELECT id, name, manager_id, role FROM users WHERE id = $1`,
-      [session.user.id],
+      `SELECT id, name, manager_id, role
+       FROM users
+       WHERE id = $1 AND organization_id = $2`,
+      [session.user.id, organizationId],
     );
 
     const currentUser = userRows[0];
@@ -243,38 +248,12 @@ export async function POST(req: Request) {
         dealId: deal.id,
         companyName: deal.company,
       });
-
-      // Look up the manager's own contact details for email
-      const { rows: managerRows } = await query(
-        `SELECT email, name FROM users WHERE id = $1`,
-        [managerId],
-      );
-      const managerEmail = managerRows[0]?.email;
-      const managerName = managerRows[0]?.name ?? "Manager";
-
-      if (managerEmail) {
-        // Note: reusing the "stalled" template as a stand-in for now —
-        // consider adding a real dealCreatedTemplate since the copy
-        // ("hasn't been updated in X days") doesn't fit a brand-new deal
-        sendDealStalledEmail({
-          repEmail: managerEmail,
-          repName: managerName,
-          dealTitle: deal.title,
-          company: deal.company as string,
-          stage: deal.stage,
-          daysStale: 0,
-          dealId: deal.id,
-        }).catch((err) => console.error("[Deal Created Email] Failed:", err));
-      } else {
-        console.warn(
-          `[Deal Created Email] Skipped — no email for manager ${managerId}`,
-        );
-      }
     } else {
       console.log(
-        `Notification skipped: User ${session.user.id} (${currentUser?.name || "Unknown"}) doesn't have a manager assigned`,
+        `Notification skipped: user ${session.user.id} has no manager assigned`,
       );
     }
+
     return NextResponse.json({
       success: true,
       message: "Deal created successfully",
