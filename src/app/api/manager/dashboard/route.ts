@@ -1,5 +1,3 @@
-// app/api/manager/dashboard/route.ts
-
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";

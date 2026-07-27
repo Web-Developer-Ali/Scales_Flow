@@ -1,6 +1,3 @@
-// app/api/admin/team/route.ts
-// (or wherever your team-list GET route lives)
-
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { getServerSession } from "next-auth";
