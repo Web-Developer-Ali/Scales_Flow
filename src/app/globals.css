@@ -115,6 +115,35 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Sonner Toast Styling */
+:where(.sonner-toaster) {
+  --radius: 0.625rem;
+}
+
+:where(.sonner-toast) {
+  @apply bg-white border border-slate-200 shadow-lg;
+}
+
+:where(.sonner-toast) p {
+  @apply text-slate-700;
+}
+
+:where(.sonner-toast)[data-type="success"] {
+  @apply bg-emerald-50 border-emerald-200;
+}
+
+:where(.sonner-toast)[data-type="success"] p {
+  @apply text-slate-700;
+}
+
+:where(.sonner-toast)[data-type="error"] {
+  @apply bg-red-50 border-red-200;
+}
+
+:where(.sonner-toast)[data-type="error"] p {
+  @apply text-slate-700;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

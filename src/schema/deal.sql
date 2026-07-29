@@ -85,14 +85,6 @@ FOR EACH ROW EXECUTE FUNCTION set_generated_month();
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 -- All indexes include organization_id as leading column for multi-tenant queries
 
-DROP INDEX IF EXISTS idx_deals_month_status_value;
-DROP INDEX IF EXISTS idx_deals_won_close_time;
-DROP INDEX IF EXISTS idx_deals_month_stage;
-DROP INDEX IF EXISTS idx_deals_month_assigned_won;
-DROP INDEX IF EXISTS idx_deals_month_created_desc;
-DROP INDEX IF EXISTS idx_deals_client_id;
-DROP INDEX IF EXISTS idx_deals_assigned_status;
-
 CREATE INDEX IF NOT EXISTS idx_deals_org_month_status_value
     ON deals (organization_id, generated_month, status)
     INCLUDE (value);

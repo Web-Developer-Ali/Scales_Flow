@@ -44,11 +44,6 @@ CREATE TABLE IF NOT EXISTS user_activities (
 -- ─── Indexes ───────────────────────────────────────────────────────────────────
 -- All indexes include organization_id as leading column
 
-DROP INDEX IF EXISTS idx_user_activities_user_id;
-DROP INDEX IF EXISTS idx_user_activities_performed_by;
-DROP INDEX IF EXISTS idx_user_activities_type;
-DROP INDEX IF EXISTS idx_user_activities_entity;
-
 CREATE INDEX IF NOT EXISTS idx_user_activities_org_user_id
     ON user_activities (organization_id, user_id, created_at DESC);
 
