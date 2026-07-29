@@ -54,11 +54,6 @@ FOR EACH ROW EXECUTE FUNCTION update_client_timestamp();
 -- ── INDEXES ───────────────────────────────────────────────────────────────────
 -- All indexes include organization_id as leading column
 
-DROP INDEX IF EXISTS idx_clients_assigned_to;
-DROP INDEX IF EXISTS idx_clients_status;
-DROP INDEX IF EXISTS idx_clients_created_by;
-DROP INDEX IF EXISTS idx_clients_company_name;
-
 CREATE INDEX IF NOT EXISTS idx_clients_org_assigned_to
     ON clients (organization_id, assigned_to);
 

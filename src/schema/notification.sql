@@ -45,10 +45,6 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 -- All indexes include organization_id as leading column
 
-DROP INDEX IF EXISTS idx_notifications_user_unread;
-DROP INDEX IF EXISTS idx_notifications_user_id;
-DROP INDEX IF EXISTS idx_notifications_entity;
-
 CREATE INDEX IF NOT EXISTS idx_notifications_org_user_unread
     ON notifications (organization_id, user_id, created_at DESC)
     WHERE is_read = FALSE;
